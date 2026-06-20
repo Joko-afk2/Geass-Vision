@@ -1,5 +1,6 @@
 import type { Suggestion } from "../api/gameApi";
 import { scoreVersTexte } from "../utils/chessDisplay";
+import type { Arrow, Square } from "react-chessboard/dist/chessboard/types";
 
 interface PropsSuggestions {
   suggestions: Suggestion[];
@@ -16,13 +17,13 @@ const COULEURS_FLECHES = [
 export function flechesDepuisSuggestions(
   suggestions: Suggestion[],
   actives: boolean,
-): [string, string, string][] {
+): Arrow[] {
   if (!actives) {
     return [];
   }
   return suggestions.slice(0, 3).map((suggestion, index) => {
-    const depart = suggestion.uci.slice(0, 2);
-    const arrivee = suggestion.uci.slice(2, 4);
+    const depart = suggestion.uci.slice(0, 2) as Square;
+    const arrivee = suggestion.uci.slice(2, 4) as Square;
     return [depart, arrivee, COULEURS_FLECHES[index] ?? COULEURS_FLECHES[0]];
   });
 }

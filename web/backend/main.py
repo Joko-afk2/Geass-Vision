@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from web.backend.routes.analyze import router as analyze_router
@@ -55,4 +56,17 @@ def health() -> dict[str, str]:
 
 
 if STATIC_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="frontend")
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/")
+    def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/{chemin:path}")
+    def fichiers_statiques(chemin: str) -> FileResponse:
+        fichier = STATIC_DIR / chemin
+        if fichier.is_file():
+            return FileResponse(fichier)
+        return FileResponse(STATIC_DIR / "index.html")

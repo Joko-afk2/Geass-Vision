@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 interface PropsHistorique {
   coups: string[];
   plyVue: number | null;

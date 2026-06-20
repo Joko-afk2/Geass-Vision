@@ -19,7 +19,16 @@ docker compose up --build
 
 Ouvre http://localhost:8080
 
-## Mise en ligne
+## Mise en ligne (Render)
 
-Render / VPS : voir `Dockerfile` à la racine.  
-Guides détaillés : dossier `explications/` (sur ton PC, pas obligatoire sur GitHub).
+1. Pousse ce dépôt sur GitHub (branche `main`).
+2. Compte sur [render.com](https://render.com) → **New → Blueprint** ou **Web Service**.
+3. Connecte le dépôt **Geass-Vision**, runtime **Docker**, fichier `./Dockerfile`.
+4. Instance **512 Mo RAM** minimum. Render définit `PORT` automatiquement.
+5. URL publique : `https://…onrender.com` — échiquier + API sur la même adresse.
+
+Vérifier : `https://ton-url/health` → `{"status":"ok"}`
+
+> Plan gratuit : veille après inactivité (~30 s au 1er chargement).
+
+Test local Docker : `docker compose up --build` → http://localhost:8080
