@@ -112,6 +112,19 @@
   margin-top: 0.5rem;
 }
 
+.aide-mode {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #9aa0a6;
+}
+
+.mode-sans-aide {
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+  color: #ffb347;
+  font-style: italic;
+}
+
 .zone-import {
   width: 100%;
   margin-top: 0.75rem;

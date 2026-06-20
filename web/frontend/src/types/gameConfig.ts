@@ -13,6 +13,8 @@ export interface ConfigurationPartie {
   elo: number;
   couleurHumain: ChoixCouleur;
   cadence: Cadence;
+  /** Mode sans aide : ni barre d'évaluation, ni suggestions, ni menaces. */
+  sansAide: boolean;
   fen?: string;
   pgn?: string;
 }

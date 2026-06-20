@@ -16,6 +16,7 @@ type ModeImport = "aucun" | "fen" | "pgn";
 export function GameSetup({ onDemarrer, chargement }: PropsConfiguration) {
   const [elo, setElo] = useState(1200);
   const [couleur, setCouleur] = useState<ChoixCouleur>("white");
+  const [sansAide, setSansAide] = useState(false);
   const [cadenceChoisie, setCadenceChoisie] = useState("3+0");
   const [modePersonnalise, setModePersonnalise] = useState(false);
   const [minutesPerso, setMinutesPerso] = useState(5);
@@ -34,6 +35,7 @@ export function GameSetup({ onDemarrer, chargement }: PropsConfiguration) {
       elo,
       couleurHumain: couleur,
       cadence,
+      sansAide,
     };
 
     if (modeImport === "fen" && fenImport.trim()) {
@@ -202,6 +204,31 @@ export function GameSetup({ onDemarrer, chargement }: PropsConfiguration) {
             rows={5}
           />
         )}
+      </fieldset>
+
+      <fieldset className="groupe">
+        <legend>Mode de jeu</legend>
+        <div className="boutons-couleur">
+          <button
+            type="button"
+            className={!sansAide ? "actif" : ""}
+            onClick={() => setSansAide(false)}
+          >
+            Avec aides
+          </button>
+          <button
+            type="button"
+            className={sansAide ? "actif" : ""}
+            onClick={() => setSansAide(true)}
+          >
+            Sans aide
+          </button>
+        </div>
+        <p className="aide-mode">
+          {sansAide
+            ? "Aucune assistance : pas de barre d'évaluation, ni suggestions, ni menaces."
+            : "Barre d'évaluation, suggestions et menaces disponibles (à activer pendant la partie)."}
+        </p>
       </fieldset>
 
       <button

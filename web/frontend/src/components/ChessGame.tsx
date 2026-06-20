@@ -77,11 +77,12 @@ export function ChessGame() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [dernierCoupMoteur, setDernierCoupMoteur] = useState<string | null>(null);
   const [enConfiguration, setEnConfiguration] = useState(true);
-  const [barreEvalVisible, setBarreEvalVisible] = useState(true);
+  const [barreEvalVisible, setBarreEvalVisible] = useState(false);
   const [flechesActives, setFlechesActives] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [menaces, setMenaces] = useState<Menaces | null>(null);
-  const [menacesActives, setMenacesActives] = useState(true);
+  const [menacesActives, setMenacesActives] = useState(false);
+  const [sansAide, setSansAide] = useState(false);
   const [historique, setHistorique] = useState<string[]>([]);
   const [plyVue, setPlyVue] = useState<number | null>(null);
 
@@ -126,7 +127,14 @@ export function ChessGame() {
   }, [timeout, couleurHumain]);
 
   useEffect(() => {
-    if (!gameId || partieTerminee || !tourHumain || chargement || enRevue) {
+    if (
+      sansAide ||
+      !gameId ||
+      partieTerminee ||
+      !tourHumain ||
+      chargement ||
+      enRevue
+    ) {
       setSuggestions([]);
       return;
     }
@@ -147,11 +155,11 @@ export function ChessGame() {
     return () => {
       annule = true;
     };
-  }, [gameId, fen, tourHumain, partieTerminee, chargement, enRevue]);
+  }, [gameId, fen, tourHumain, partieTerminee, chargement, enRevue, sansAide]);
 
   useEffect(() => {
-    if (!gameId || partieTerminee || chargement || enRevue) {
-      if (enRevue) {
+    if (sansAide || !gameId || partieTerminee || chargement || enRevue) {
+      if (enRevue || sansAide) {
         setMenaces(null);
       }
       return;
@@ -173,7 +181,7 @@ export function ChessGame() {
     return () => {
       annule = true;
     };
-  }, [gameId, fen, partieTerminee, chargement, enRevue]);
+  }, [gameId, fen, partieTerminee, chargement, enRevue, sansAide]);
 
   const fleches = flechesDepuisSuggestions(suggestions, flechesActives);
   const stylesCases = stylesDepuisMenaces(menaces, menacesActives);
@@ -183,6 +191,10 @@ export function ChessGame() {
       setGameId(donnees.game_id);
       setFen(donnees.fen);
       setConfig(configuration);
+      setSansAide(configuration.sansAide);
+      setBarreEvalVisible(false);
+      setFlechesActives(false);
+      setMenacesActives(false);
       setCouleurHumain(donnees.human_color);
       setEvaluation(donnees.evaluation);
       setPartieTerminee(donnees.is_game_over);
@@ -318,7 +330,7 @@ export function ChessGame() {
         <div className="zone-plateau">
           <EvalBar
             evaluation={evaluation}
-            visible={barreEvalVisible}
+            visible={!sansAide && barreEvalVisible}
             orientation={couleurHumain}
           />
           <div className="plateau">
@@ -351,14 +363,18 @@ export function ChessGame() {
           {couleurHumain === "white" ? "Blancs" : "Noirs"}
           {config?.couleurHumain === "random" ? " (tirage aléatoire)" : ""}
         </p>
-        <label className="case-option">
-          <input
-            type="checkbox"
-            checked={barreEvalVisible}
-            onChange={(event) => setBarreEvalVisible(event.target.checked)}
-          />
-          Barre d&apos;évaluation
-        </label>
+        {sansAide ? (
+          <p className="mode-sans-aide">Mode sans aide</p>
+        ) : (
+          <label className="case-option">
+            <input
+              type="checkbox"
+              checked={barreEvalVisible}
+              onChange={(event) => setBarreEvalVisible(event.target.checked)}
+            />
+            Barre d&apos;évaluation
+          </label>
+        )}
         <p>
           <strong>Tour :</strong>{" "}
           {partieTerminee
@@ -377,16 +393,20 @@ export function ChessGame() {
             <strong>Résultat :</strong> {resultat}
           </p>
         )}
-        <Suggestions
-          suggestions={suggestions}
-          flechesActives={flechesActives}
-          onBasculerFleches={setFlechesActives}
-        />
-        <Threats
-          menaces={menaces}
-          actif={menacesActives}
-          onBasculer={setMenacesActives}
-        />
+        {!sansAide && (
+          <>
+            <Suggestions
+              suggestions={suggestions}
+              flechesActives={flechesActives}
+              onBasculerFleches={setFlechesActives}
+            />
+            <Threats
+              menaces={menaces}
+              actif={menacesActives}
+              onBasculer={setMenacesActives}
+            />
+          </>
+        )}
         <MoveHistory
           coups={historique}
           plyVue={plyVue}
