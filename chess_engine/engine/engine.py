@@ -127,8 +127,15 @@ class MoteurEchecs:
         self,
         board: chess.Board,
         gestionnaire: GestionnaireTemps | None = None,
+        budget_secondes: float | None = None,
     ) -> chess.Move | None:
-        """Choisit un coup selon le niveau Elo (profondeur, bruit, erreurs, top-N)."""
+        """
+        Choisit un coup selon le niveau Elo (profondeur, bruit, erreurs, top-N).
+
+        Si ``budget_secondes`` est fourni, la recherche est bornée en temps
+        (approfondissement itératif) : un coup est toujours renvoyé rapidement,
+        ce qui évite tout blocage dans les positions complexes.
+        """
         coups_legaux = list(board.legal_moves)
         if not coups_legaux:
             return None
@@ -145,6 +152,14 @@ class MoteurEchecs:
                 coup_livre = livre_ouvertures.coup_livre(board)
                 if coup_livre is not None:
                     return coup_livre
+
+            if budget_secondes is not None:
+                scores = search.scores_coups_racine_iteratif(
+                    board, parametres.profondeur_max, budget_secondes
+                )
+                if scores:
+                    return _selectionner_coup(board, scores, parametres.top_n)
+                return random.choice(coups_legaux)
 
             if parametres.elo >= 1800 and gestionnaire is not None:
                 coup, _ = recherche_approfondissement(board, gestionnaire)

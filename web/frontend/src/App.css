@@ -125,6 +125,24 @@
   font-style: italic;
 }
 
+.bouton-menu {
+  align-self: flex-start;
+  background: #3a4048;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.75rem;
+}
+
+.bouton-menu:hover {
+  background: #4a5058;
+}
+
+.coup-fige {
+  display: block;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  color: #c8ccd0;
+}
+
 .zone-import {
   width: 100%;
   margin-top: 0.75rem;

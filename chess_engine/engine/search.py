@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import time
 
 import chess
 
@@ -577,6 +578,88 @@ def trouver_meilleur_coup(board: chess.Board, profondeur: int) -> chess.Move | N
             return coup_livre
 
     return _trouver_meilleur_coup_profondeur(board, profondeur, reinit_tt=True)
+
+
+class _GardeTemps:
+    """Borne dure de temps (budget fixe par coup), indépendante de la cadence."""
+
+    def __init__(self, budget_secondes: float) -> None:
+        self.deadline = time.perf_counter() + max(0.05, budget_secondes)
+
+    def temps_ecoule(self) -> bool:
+        return time.perf_counter() >= self.deadline
+
+
+def scores_coups_racine_iteratif(
+    board: chess.Board,
+    profondeur_max: int,
+    budget_secondes: float,
+) -> list[tuple[chess.Move, int]]:
+    """
+    Approfondissement itératif borné en temps à la racine.
+
+    Renvoie les scores de la dernière profondeur **entièrement** calculée
+    (perspective Blancs). Garantit toujours au moins un résultat (profondeur 1)
+    afin qu'un coup soit toujours disponible, même si le budget est minuscule.
+    """
+    global gestionnaire_temps_actif, recherche_interrompue
+
+    coups = _coups_racine_ordonnes(board)
+    if not coups:
+        return []
+
+    garde = _GardeTemps(budget_secondes)
+    gestionnaire_temps_actif = garde
+
+    ordonnancement.reinitialiser()
+    table_tt.reinitialiser()
+    reinitialiser_caches()
+
+    cle_racine = zobrist.hash_initial(board)
+    blancs_au_trait = board.turn == chess.WHITE
+    meilleurs: list[tuple[chess.Move, int]] = [(coup, 0) for coup in coups]
+
+    try:
+        for profondeur in range(1, max(1, profondeur_max) + 1):
+            recherche_interrompue = False
+            resultats: list[tuple[chess.Move, int]] = []
+            complet = True
+            alpha = -SCORE_MAT * 2
+            beta = SCORE_MAT * 2
+
+            for coup in coups:
+                if recherche_interrompue:
+                    complet = False
+                    break
+                cle_fils = zobrist.appliquer_coup(cle_racine, board, coup)
+                board.push(coup)
+                score = alpha_beta(
+                    board, max(0, profondeur - 1), alpha, beta, niveau=2, cle=cle_fils
+                )
+                board.pop()
+                if recherche_interrompue:
+                    complet = False
+                    break
+                resultats.append((coup, score))
+
+            if complet and resultats:
+                meilleurs = resultats
+                coups = [
+                    coup
+                    for coup, _ in sorted(
+                        resultats, key=lambda paire: paire[1], reverse=blancs_au_trait
+                    )
+                ]
+            else:
+                break
+
+            if garde.temps_ecoule():
+                break
+
+        return meilleurs
+    finally:
+        gestionnaire_temps_actif = None
+        recherche_interrompue = False
 
 
 def recherche_approfondissement(

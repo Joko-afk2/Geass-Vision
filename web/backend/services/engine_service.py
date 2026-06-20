@@ -13,7 +13,13 @@ import chess.pgn
 from chess_engine.engine.engine import MoteurEchecs, parametres_depuis_elo
 from chess_engine.engine.evaluation import evaluer
 import chess_engine.engine.search as search_module
-from chess_engine.engine.search import scores_coups_racine
+from chess_engine.engine.search import scores_coups_racine_iteratif
+
+# Temps de réflexion maximal du moteur par coup (secondes).
+# Borne dure : garantit une réponse rapide même dans les positions complexes.
+BUDGET_MOTEUR_SECONDES = 2.5
+# Budget plus court pour le calcul des suggestions (affichées en tâche de fond).
+BUDGET_SUGGESTIONS_SECONDES = 1.0
 
 
 @dataclass
@@ -238,7 +244,9 @@ class ServiceMoteur:
         search_module.bruit_evaluation = 0
         search_module.livre_actif = False
         try:
-            scores = scores_coups_racine(board, profondeur)
+            scores = scores_coups_racine_iteratif(
+                board, profondeur, BUDGET_SUGGESTIONS_SECONDES
+            )
         finally:
             search_module.bruit_evaluation = ancien_bruit
             search_module.livre_actif = ancien_livre
@@ -356,7 +364,9 @@ class ServiceMoteur:
 
     def _choisir_coup_moteur(self, partie: Partie) -> chess.Move | None:
         moteur = MoteurEchecs(elo=partie.elo)
-        coup = moteur.choisir_coup(partie.board)
+        coup = moteur.choisir_coup(
+            partie.board, budget_secondes=BUDGET_MOTEUR_SECONDES
+        )
         if coup is None or coup not in partie.board.legal_moves:
             return None
         return coup

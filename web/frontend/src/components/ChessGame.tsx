@@ -319,6 +319,13 @@ export function ChessGame() {
     <>
     <section className="partie">
       <div className="colonne-plateau">
+        <button
+          type="button"
+          className="bouton-menu"
+          onClick={retourConfiguration}
+        >
+          ← Menu principal
+        </button>
         <GameTimer
           tempsBlanc={tempsBlanc}
           tempsNoir={tempsNoir}
@@ -411,8 +418,9 @@ export function ChessGame() {
           coups={historique}
           plyVue={plyVue}
           onChangerPly={setPlyVue}
+          navigationVisible={partieTerminee}
         />
-        {gameId && <GameExport gameId={gameId} />}
+        {gameId && partieTerminee && <GameExport gameId={gameId} />}
         <button type="button" onClick={retourConfiguration} disabled={chargement}>
           Nouvelle partie
         </button>
