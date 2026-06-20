@@ -11,9 +11,14 @@ export function EvalBar({ evaluation, visible, orientation }: PropsBarreEval) {
     return null;
   }
 
+  // Remplissage = part des Blancs (orienté via CSS selon le camp du joueur).
   const pourcentage = evaluationVersPourcentage(evaluation);
+  // Chiffre affiché du point de vue du joueur (positif = avantage pour lui).
+  const valeurJoueur = orientation === "white" ? evaluation : -evaluation;
   const texte =
-    evaluation > 0 ? `+${(evaluation / 100).toFixed(1)}` : (evaluation / 100).toFixed(1);
+    valeurJoueur > 0
+      ? `+${(valeurJoueur / 100).toFixed(1)}`
+      : (valeurJoueur / 100).toFixed(1);
 
   return (
     <div

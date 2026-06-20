@@ -1,9 +1,20 @@
 :root {
+  --gv-fond: #08080c;
+  --gv-fond-2: #14111a;
+  --gv-panneau: #161019;
+  --gv-rouge: #e0102f;
+  --gv-rouge-clair: #ff2a47;
+  --gv-rouge-sombre: #8a0a1f;
+  --gv-or: #d4af37;
+  --gv-texte: #ece8ee;
+  --gv-texte-doux: #9a90a4;
+  --gv-bordure: #3a2230;
+
   font-family: "Segoe UI", system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #e8eaed;
-  background-color: #1a1d21;
+  color: var(--gv-texte);
+  background-color: var(--gv-fond);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -16,6 +27,9 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background:
+    radial-gradient(900px 500px at 50% -10%, rgba(224, 16, 47, 0.16), transparent 70%),
+    var(--gv-fond);
 }
 
 #root {
@@ -28,11 +42,17 @@ button {
   border: none;
   border-radius: 8px;
   padding: 0.6rem 1.2rem;
-  background: #3d7eff;
+  background: linear-gradient(180deg, var(--gv-rouge), var(--gv-rouge-sombre));
   color: #fff;
+  transition: filter 0.15s, box-shadow 0.15s;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.15);
+  box-shadow: 0 0 12px rgba(224, 16, 47, 0.45);
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }

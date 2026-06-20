@@ -6,16 +6,83 @@
 
 .entete {
   margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--gv-bordure);
+  padding-bottom: 1rem;
+}
+
+.entete-marque {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logo-geass {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(224, 16, 47, 0.7));
 }
 
 .entete h1 {
-  margin: 0 0 0.25rem;
-  font-size: 1.75rem;
+  margin: 0 0 0.15rem;
+  font-size: 2rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #fff, var(--gv-rouge-clair));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 18px rgba(224, 16, 47, 0.35);
 }
 
 .entete p {
   margin: 0;
-  color: #9aa0a6;
+  color: var(--gv-texte-doux);
+  font-size: 0.9rem;
+}
+
+.pied {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--gv-bordure);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: var(--gv-texte-doux);
+}
+
+.pied a {
+  color: var(--gv-rouge-clair);
+  text-decoration: none;
+}
+
+.pied a:hover {
+  text-decoration: underline;
+}
+
+.nav-rapide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.nav-rapide button {
+  background: #241019;
+  border: 1px solid var(--gv-bordure);
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.nav-rapide-pos {
+  font-size: 0.85rem;
+  color: var(--gv-texte-doux);
+  min-width: 9rem;
+  text-align: center;
 }
 
 .partie {
@@ -33,7 +100,8 @@
 }
 
 .configuration {
-  background: #252a30;
+  background: var(--gv-panneau);
+  border: 1px solid var(--gv-bordure);
   border-radius: 12px;
   padding: 1.5rem;
   max-width: 480px;
@@ -68,7 +136,8 @@
 
 .boutons-couleur button.actif,
 .boutons-cadence button.actif {
-  background: #3d7eff;
+  background: linear-gradient(180deg, var(--gv-rouge), var(--gv-rouge-sombre));
+  box-shadow: 0 0 10px rgba(224, 16, 47, 0.4);
 }
 
 .groupe input[type="range"] {
@@ -210,11 +279,11 @@
 }
 
 .liste-historique button.actif {
-  background: #3d7eff;
+  background: var(--gv-rouge);
 }
 
 .liste-historique button:hover {
-  background: #2a3140;
+  background: #241019;
 }
 
 .export-partie {
@@ -261,15 +330,16 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.65rem 1rem;
-  background: #252a30;
+  background: var(--gv-panneau);
   border-radius: 8px;
   border: 2px solid transparent;
   transition: border-color 0.15s;
 }
 
 .horloge.active {
-  border-color: #3d7eff;
-  background: #2a3140;
+  border-color: var(--gv-rouge);
+  background: #241019;
+  box-shadow: 0 0 10px rgba(224, 16, 47, 0.3);
 }
 
 .horloge-label {
@@ -319,7 +389,8 @@
   flex: 1;
   width: 100%;
   min-height: 280px;
-  background: linear-gradient(to top, #1a1d21 50%, #f0f0f0 50%);
+  background: #0a0a0e;
+  border: 1px solid #3a2030;
   border-radius: 6px;
   overflow: hidden;
 }
@@ -329,7 +400,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: #f0f0f0;
+  background: #ececec;
   transition: height 0.3s ease;
 }
 
@@ -459,7 +530,8 @@
 .revue-partie {
   margin-top: 2rem;
   padding: 1.5rem;
-  background: #252a30;
+  background: var(--gv-panneau);
+  border: 1px solid var(--gv-bordure);
   border-radius: 12px;
 }
 
@@ -526,12 +598,12 @@
 
 .courbe-eval {
   fill: none;
-  stroke: #3d7eff;
+  stroke: var(--gv-rouge);
   stroke-width: 2;
 }
 
 .point-eval {
-  fill: #3d7eff;
+  fill: var(--gv-rouge);
 }
 
 .legendes-eval {
@@ -598,7 +670,8 @@
 }
 
 .panneau {
-  background: #252a30;
+  background: var(--gv-panneau);
+  border: 1px solid var(--gv-bordure);
   border-radius: 12px;
   padding: 1.25rem;
 }

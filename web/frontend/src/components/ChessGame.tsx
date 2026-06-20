@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 
@@ -85,6 +86,7 @@ export function ChessGame() {
   const [sansAide, setSansAide] = useState(false);
   const [historique, setHistorique] = useState<string[]>([]);
   const [plyVue, setPlyVue] = useState<number | null>(null);
+  const [caseSelectionnee, setCaseSelectionnee] = useState<string | null>(null);
 
   const enRevue = plyVue !== null;
   const fenPlateau = enRevue
@@ -184,7 +186,30 @@ export function ChessGame() {
   }, [gameId, fen, partieTerminee, chargement, enRevue, sansAide]);
 
   const fleches = flechesDepuisSuggestions(suggestions, flechesActives);
-  const stylesCases = stylesDepuisMenaces(menaces, menacesActives);
+  const stylesCases: Record<string, CSSProperties> = {
+    ...stylesDepuisMenaces(menaces, menacesActives),
+  };
+  if (caseSelectionnee && tourHumain && !enRevue) {
+    stylesCases[caseSelectionnee] = {
+      ...stylesCases[caseSelectionnee],
+      background: "rgba(225, 16, 46, 0.45)",
+    };
+    try {
+      const echecsSel = new Chess(fenPourChess(fen));
+      for (const coup of echecsSel.moves({
+        square: caseSelectionnee as never,
+        verbose: true,
+      }) as Array<{ to: string }>) {
+        stylesCases[coup.to] = {
+          ...stylesCases[coup.to],
+          background:
+            "radial-gradient(circle, rgba(225, 16, 46, 0.55) 24%, transparent 28%)",
+        };
+      }
+    } catch {
+      // case sans coup légal : pas de surbrillance
+    }
+  }
 
   const appliquerEtatPartie = useCallback(
     (donnees: NouvellePartieReponse, configuration: ConfigurationPartie) => {
@@ -253,6 +278,7 @@ export function ChessGame() {
     setMenaces(null);
     setHistorique([]);
     setPlyVue(null);
+    setCaseSelectionnee(null);
   };
 
   const envoyerCoup = async (uci: string) => {
@@ -275,26 +301,28 @@ export function ChessGame() {
     }
   };
 
-  const onPieceDrop = (
-    sourceSquare: string,
-    targetSquare: string,
-    piece: string,
-  ): boolean => {
+  const tenterCoup = (depart: string, arrivee: string): boolean => {
     if (!gameId || !tourHumain || chargement || partieTerminee || enRevue) {
       return false;
     }
 
     const echecs = new Chess(fenPourChess(fen));
+    const piece = echecs.get(depart as never);
     const estPromotion =
-      piece[1]?.toLowerCase() === "p" &&
-      ((piece[0] === "w" && targetSquare[1] === "8") ||
-        (piece[0] === "b" && targetSquare[1] === "1"));
+      piece?.type === "p" &&
+      ((piece.color === "w" && arrivee[1] === "8") ||
+        (piece.color === "b" && arrivee[1] === "1"));
 
-    const coup = echecs.move({
-      from: sourceSquare,
-      to: targetSquare,
-      promotion: estPromotion ? "q" : undefined,
-    });
+    let coup: ReturnType<Chess["move"]> | null = null;
+    try {
+      coup = echecs.move({
+        from: depart,
+        to: arrivee,
+        promotion: estPromotion ? "q" : undefined,
+      });
+    } catch {
+      coup = null;
+    }
 
     if (!coup) {
       return false;
@@ -302,8 +330,55 @@ export function ChessGame() {
 
     const uci = `${coup.from}${coup.to}${coup.promotion ?? ""}`;
     setFen(echecs.fen());
+    setCaseSelectionnee(null);
     void envoyerCoup(uci);
     return true;
+  };
+
+  const onPieceDrop = (sourceSquare: string, targetSquare: string): boolean => {
+    setCaseSelectionnee(null);
+    return tenterCoup(sourceSquare, targetSquare);
+  };
+
+  const onSquareClick = (square: string) => {
+    if (!gameId || !tourHumain || chargement || partieTerminee || enRevue) {
+      return;
+    }
+
+    const echecs = new Chess(fenPourChess(fen));
+    const traitCourant = echecs.turn();
+
+    if (caseSelectionnee) {
+      if (square === caseSelectionnee) {
+        setCaseSelectionnee(null);
+        return;
+      }
+      if (tenterCoup(caseSelectionnee, square)) {
+        return;
+      }
+      const cible = echecs.get(square as never);
+      if (cible && cible.color === traitCourant) {
+        setCaseSelectionnee(square);
+      } else {
+        setCaseSelectionnee(null);
+      }
+      return;
+    }
+
+    const piece = echecs.get(square as never);
+    if (piece && piece.color === traitCourant) {
+      setCaseSelectionnee(square);
+    }
+  };
+
+  const plyAffiche = plyVue ?? historique.length;
+  const reculerCoup = () => {
+    setCaseSelectionnee(null);
+    setPlyVue(Math.max(0, plyAffiche - 1));
+  };
+  const avancerCoup = () => {
+    const suivant = plyAffiche + 1;
+    setPlyVue(suivant >= historique.length ? null : suivant);
   };
 
   if (enConfiguration) {
@@ -344,6 +419,7 @@ export function ChessGame() {
             <Chessboard
               position={fenPlateau}
               onPieceDrop={onPieceDrop}
+              onSquareClick={onSquareClick}
               boardOrientation={couleurHumain}
               arePiecesDraggable={
                 tourHumain && !chargement && !partieTerminee && !enRevue
@@ -358,6 +434,31 @@ export function ChessGame() {
             />
           </div>
         </div>
+        {!partieTerminee && historique.length > 0 && (
+          <div className="nav-rapide">
+            <button
+              type="button"
+              onClick={reculerCoup}
+              disabled={plyAffiche <= 0}
+              title="Voir la position précédente"
+            >
+              ◀ Précédent
+            </button>
+            <span className="nav-rapide-pos">
+              {enRevue
+                ? `Coup ${plyAffiche} / ${historique.length}`
+                : "Position actuelle"}
+            </span>
+            <button
+              type="button"
+              onClick={avancerCoup}
+              disabled={!enRevue}
+              title="Revenir à la position actuelle"
+            >
+              Actuel ▶
+            </button>
+          </div>
+        )}
       </div>
 
       <aside className="panneau">
