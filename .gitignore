@@ -1,0 +1,33 @@
+# Dossiers Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Node.js (ne pas envoyer — très lourd, Render les recrée tout seul)
+node_modules/
+web/frontend/node_modules/
+web/frontend/dist/
+
+# Build Docker (généré automatiquement au déploiement)
+web/backend/static/*
+!web/backend/static/.gitkeep
+
+# IDE / outils locaux
+.cursor/
+.vscode/
+.idea/
+*.swp
+
+# Secrets (ne jamais mettre en ligne)
+.env
+.env.*
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Documentation et tests locaux (ne pas envoyer sur GitHub)
+explications/

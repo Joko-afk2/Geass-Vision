@@ -1,0 +1,13 @@
+__pycache__
+*.py[cod]
+.pytest_cache
+.git
+.gitignore
+.cursor
+node_modules
+web/frontend/node_modules
+web/frontend/dist
+*.md
+!README.md
+.env
+.env.*
