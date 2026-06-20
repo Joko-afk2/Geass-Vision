@@ -2,12 +2,14 @@
 
 import { Chess } from "chess.js";
 
+import { fenPourChess } from "./chessFen";
+
 export function fenDepuisHistorique(
   coups: string[],
   jusquA: number,
   fenDepart?: string,
 ): string {
-  const echecs = new Chess(fenDepart);
+  const echecs = new Chess(fenPourChess(fenDepart));
   const limite = Math.min(jusquA, coups.length);
   for (let i = 0; i < limite; i += 1) {
     const uci = coups[i];
@@ -24,7 +26,7 @@ export function coupsEnNotation(
   coups: string[],
   fenDepart?: string,
 ): string[] {
-  const echecs = new Chess(fenDepart);
+  const echecs = new Chess(fenPourChess(fenDepart));
   return coups.map((uci) => {
     const coup = echecs.move({
       from: uci.slice(0, 2),

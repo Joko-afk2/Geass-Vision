@@ -18,7 +18,7 @@ def obtenir_service() -> ServiceMoteur:
 
 class NouvellePartieRequete(BaseModel):
     elo: int = Field(default=1200, ge=1, le=2000)
-    human_color: Literal["white", "black"] = "white"
+    human_color: Literal["white", "black", "random"] = "white"
     fen: str | None = None
 
 
@@ -88,13 +88,13 @@ class MenacesReponse(BaseModel):
 class ChargerFenRequete(BaseModel):
     fen: str
     elo: int = Field(default=1200, ge=1, le=2000)
-    human_color: Literal["white", "black"] = "white"
+    human_color: Literal["white", "black", "random"] = "white"
 
 
 class ImporterPgnRequete(BaseModel):
     pgn: str
     elo: int = Field(default=1200, ge=1, le=2000)
-    human_color: Literal["white", "black"] = "white"
+    human_color: Literal["white", "black", "random"] = "white"
 
 
 class PgnReponse(BaseModel):

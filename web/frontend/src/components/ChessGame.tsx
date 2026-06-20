@@ -14,9 +14,16 @@ import {
   type NouvellePartieReponse,
   type Suggestion,
 } from "../api/gameApi";
+import {
+  COULEUR_CASE_CLAIRE,
+  COULEUR_CASE_SOMBRE,
+  PIECES_PERSONNALISEES,
+  STYLE_PLATEAU,
+} from "../constants/chessTheme";
 import type { ConfigurationPartie } from "../types/gameConfig";
 import { useChessClock } from "../hooks/useChessClock";
 import { fenDepuisHistorique } from "../utils/moveHistory";
+import { fenPourAffichage, fenPourChess } from "../utils/chessFen";
 import { EvalBar } from "./EvalBar";
 import { GameExport } from "./GameExport";
 import { flechesDepuisSuggestions, Suggestions } from "./Suggestions";
@@ -34,14 +41,14 @@ function estTourHumain(
   if (partieTerminee) {
     return false;
   }
-  const echecs = new Chess(fen);
+  const echecs = new Chess(fenPourChess(fen));
   const trait = echecs.turn() === "w" ? "white" : "black";
   return trait === couleurHumain;
 }
 
 function traitDepuisFen(fen: string): "white" | "black" | null {
   try {
-    const echecs = new Chess(fen === "start" ? undefined : fen);
+    const echecs = new Chess(fenPourChess(fen));
     return echecs.turn() === "w" ? "white" : "black";
   } catch {
     return null;
@@ -79,8 +86,9 @@ export function ChessGame() {
   const [plyVue, setPlyVue] = useState<number | null>(null);
 
   const enRevue = plyVue !== null;
-  const fenPlateau =
-    enRevue ? fenDepuisHistorique(historique, plyVue) : fen;
+  const fenPlateau = enRevue
+    ? fenDepuisHistorique(historique, plyVue, fen)
+    : fenPourAffichage(fen);
   const trait = partieTerminee
     ? null
     : traitDepuisFen(fenPlateau);
@@ -248,7 +256,7 @@ export function ChessGame() {
       setDernierCoupMoteur(donnees.engine_move);
     } catch (probleme) {
       setErreur(probleme instanceof Error ? probleme.message : "Erreur inconnue");
-      const echecs = new Chess(fen === "start" ? undefined : fen);
+      const echecs = new Chess(fenPourChess(fen));
       setFen(echecs.fen());
     } finally {
       setChargement(false);
@@ -264,7 +272,7 @@ export function ChessGame() {
       return false;
     }
 
-    const echecs = new Chess(fen === "start" ? undefined : fen);
+    const echecs = new Chess(fenPourChess(fen));
     const estPromotion =
       piece[1]?.toLowerCase() === "p" &&
       ((piece[0] === "w" && targetSquare[1] === "8") ||
@@ -324,6 +332,10 @@ export function ChessGame() {
               animationDuration={200}
               customArrows={fleches}
               customSquareStyles={stylesCases}
+              customBoardStyle={STYLE_PLATEAU}
+              customLightSquareStyle={{ backgroundColor: COULEUR_CASE_CLAIRE }}
+              customDarkSquareStyle={{ backgroundColor: COULEUR_CASE_SOMBRE }}
+              customPieces={PIECES_PERSONNALISEES}
             />
           </div>
         </div>
@@ -333,6 +345,11 @@ export function ChessGame() {
         <h2>Partie</h2>
         <p>
           <strong>Niveau :</strong> {config?.elo ?? 1200} Elo
+        </p>
+        <p>
+          <strong>Vous jouez :</strong>{" "}
+          {couleurHumain === "white" ? "Blancs" : "Noirs"}
+          {config?.couleurHumain === "random" ? " (tirage aléatoire)" : ""}
         </p>
         <label className="case-option">
           <input

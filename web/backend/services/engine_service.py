@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from io import StringIO
 from uuid import uuid4
@@ -72,11 +73,13 @@ class MenacesPartie:
 
 
 def _couleur_depuis_chaine(nom: str) -> chess.Color:
+    if nom == "random":
+        nom = random.choice(["white", "black"])
     if nom == "white":
         return chess.WHITE
     if nom == "black":
         return chess.BLACK
-    raise ValueError("Couleur invalide : white ou black attendu.")
+    raise ValueError("Couleur invalide : white, black ou random attendu.")
 
 
 def _nom_couleur(couleur: chess.Color) -> str:

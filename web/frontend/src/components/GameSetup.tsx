@@ -4,7 +4,7 @@ import {
   CADENCES_PREDEFINIES,
   cadencePersonnalisee,
 } from "../constants/timeControls";
-import type { ConfigurationPartie, CouleurHumain } from "../types/gameConfig";
+import type { ConfigurationPartie, ChoixCouleur } from "../types/gameConfig";
 
 interface PropsConfiguration {
   onDemarrer: (config: ConfigurationPartie) => void;
@@ -15,7 +15,7 @@ type ModeImport = "aucun" | "fen" | "pgn";
 
 export function GameSetup({ onDemarrer, chargement }: PropsConfiguration) {
   const [elo, setElo] = useState(1200);
-  const [couleur, setCouleur] = useState<CouleurHumain>("white");
+  const [couleur, setCouleur] = useState<ChoixCouleur>("white");
   const [cadenceChoisie, setCadenceChoisie] = useState("3+0");
   const [modePersonnalise, setModePersonnalise] = useState(false);
   const [minutesPerso, setMinutesPerso] = useState(5);
@@ -65,6 +65,13 @@ export function GameSetup({ onDemarrer, chargement }: PropsConfiguration) {
             onClick={() => setCouleur("black")}
           >
             Noirs
+          </button>
+          <button
+            type="button"
+            className={couleur === "random" ? "actif" : ""}
+            onClick={() => setCouleur("random")}
+          >
+            Aléatoire
           </button>
         </div>
       </fieldset>

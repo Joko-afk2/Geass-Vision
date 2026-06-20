@@ -56,7 +56,7 @@ async function lireErreur(reponse: Response): Promise<string> {
 
 export async function creerPartie(
   elo = 1200,
-  humanColor: "white" | "black" = "white",
+  humanColor: "white" | "black" | "random" = "white",
   fen?: string,
 ): Promise<NouvellePartieReponse> {
   const reponse = await fetch(`${BASE}/new`, {
@@ -73,7 +73,7 @@ export async function creerPartie(
 export async function chargerFen(
   fen: string,
   elo = 1200,
-  humanColor: "white" | "black" = "white",
+  humanColor: "white" | "black" | "random" = "white",
 ): Promise<NouvellePartieReponse> {
   const reponse = await fetch(`${BASE}/load-fen`, {
     method: "POST",
@@ -89,7 +89,7 @@ export async function chargerFen(
 export async function importerPgn(
   pgn: string,
   elo = 1200,
-  humanColor: "white" | "black" = "white",
+  humanColor: "white" | "black" | "random" = "white",
 ): Promise<NouvellePartieReponse> {
   const reponse = await fetch(`${BASE}/import-pgn`, {
     method: "POST",

@@ -1,5 +1,8 @@
 export type CouleurHumain = "white" | "black";
 
+/** Choix à l'écran de configuration (inclut le tirage aléatoire). */
+export type ChoixCouleur = CouleurHumain | "random";
+
 export interface Cadence {
   label: string;
   baseMinutes: number;
@@ -8,7 +11,7 @@ export interface Cadence {
 
 export interface ConfigurationPartie {
   elo: number;
-  couleurHumain: CouleurHumain;
+  couleurHumain: ChoixCouleur;
   cadence: Cadence;
   fen?: string;
   pgn?: string;
