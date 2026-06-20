@@ -87,10 +87,12 @@ export function ChessGame() {
   const [historique, setHistorique] = useState<string[]>([]);
   const [plyVue, setPlyVue] = useState<number | null>(null);
   const [caseSelectionnee, setCaseSelectionnee] = useState<string | null>(null);
+  const [fenDepart, setFenDepart] = useState<string | undefined>(undefined);
+  const [verrouille, setVerrouille] = useState(false);
 
   const enRevue = plyVue !== null;
   const fenPlateau = enRevue
-    ? fenDepuisHistorique(historique, plyVue, fen)
+    ? fenDepuisHistorique(historique, plyVue, fenDepart)
     : fenPourAffichage(fen);
   const trait = partieTerminee
     ? null
@@ -104,7 +106,7 @@ export function ChessGame() {
   const { tempsBlanc, tempsNoir, reinitialiser, timeout } = useChessClock(
     trait,
     cadence,
-    gameId !== null && !partieTerminee,
+    gameId !== null && !partieTerminee && historique.length > 0 && !enRevue,
   );
 
   const tourHumain =
@@ -127,6 +129,13 @@ export function ChessGame() {
     setPartieTerminee(true);
     setResultat(resultatTimeout(timeout, couleurHumain));
   }, [timeout, couleurHumain]);
+
+  useEffect(() => {
+    document.body.style.overflow = verrouille ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [verrouille]);
 
   useEffect(() => {
     if (
@@ -215,6 +224,7 @@ export function ChessGame() {
     (donnees: NouvellePartieReponse, configuration: ConfigurationPartie) => {
       setGameId(donnees.game_id);
       setFen(donnees.fen);
+      setFenDepart(configuration.fen);
       setConfig(configuration);
       setSansAide(configuration.sansAide);
       setBarreEvalVisible(false);
@@ -279,6 +289,8 @@ export function ChessGame() {
     setHistorique([]);
     setPlyVue(null);
     setCaseSelectionnee(null);
+    setFenDepart(undefined);
+    setVerrouille(false);
   };
 
   const envoyerCoup = async (uci: string) => {
@@ -383,7 +395,7 @@ export function ChessGame() {
 
   if (enConfiguration) {
     return (
-      <section className="partie">
+      <section className="vue-configuration">
         <GameSetup onDemarrer={demarrerPartie} chargement={chargement} />
         {erreur && <p className="erreur">{erreur}</p>}
       </section>
@@ -394,13 +406,46 @@ export function ChessGame() {
     <>
     <section className="partie">
       <div className="colonne-plateau">
-        <button
-          type="button"
-          className="bouton-menu"
-          onClick={retourConfiguration}
-        >
-          ← Menu principal
-        </button>
+        <div className="barre-controles">
+          <button
+            type="button"
+            className="bouton-menu"
+            onClick={retourConfiguration}
+          >
+            ← Menu principal
+          </button>
+          {!partieTerminee && historique.length > 0 && (
+            <div className="nav-rapide">
+              <button
+                type="button"
+                onClick={reculerCoup}
+                disabled={plyAffiche <= 0}
+                title="Voir la position précédente"
+              >
+                ◀
+              </button>
+              <span className="nav-rapide-pos">
+                {enRevue ? `Coup ${plyAffiche}/${historique.length}` : "Actuel"}
+              </span>
+              <button
+                type="button"
+                onClick={avancerCoup}
+                disabled={!enRevue}
+                title="Revenir à la position actuelle"
+              >
+                ▶
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            className={`bouton-verrou ${verrouille ? "actif" : ""}`}
+            onClick={() => setVerrouille((v) => !v)}
+            title="Bloquer le défilement de la page"
+          >
+            {verrouille ? "Débloquer" : "Bloquer"}
+          </button>
+        </div>
         <GameTimer
           tempsBlanc={tempsBlanc}
           tempsNoir={tempsNoir}
@@ -434,31 +479,6 @@ export function ChessGame() {
             />
           </div>
         </div>
-        {!partieTerminee && historique.length > 0 && (
-          <div className="nav-rapide">
-            <button
-              type="button"
-              onClick={reculerCoup}
-              disabled={plyAffiche <= 0}
-              title="Voir la position précédente"
-            >
-              ◀ Précédent
-            </button>
-            <span className="nav-rapide-pos">
-              {enRevue
-                ? `Coup ${plyAffiche} / ${historique.length}`
-                : "Position actuelle"}
-            </span>
-            <button
-              type="button"
-              onClick={avancerCoup}
-              disabled={!enRevue}
-              title="Revenir à la position actuelle"
-            >
-              Actuel ▶
-            </button>
-          </div>
-        )}
       </div>
 
       <aside className="panneau">
@@ -522,9 +542,6 @@ export function ChessGame() {
           navigationVisible={partieTerminee}
         />
         {gameId && partieTerminee && <GameExport gameId={gameId} />}
-        <button type="button" onClick={retourConfiguration} disabled={chargement}>
-          Nouvelle partie
-        </button>
         {chargement && <p className="statut">Réflexion du moteur…</p>}
         {erreur && <p className="erreur">{erreur}</p>}
       </aside>

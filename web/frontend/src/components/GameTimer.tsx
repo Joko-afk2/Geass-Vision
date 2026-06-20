@@ -40,18 +40,20 @@ export function GameTimer({
 
   return (
     <div className="horloges">
-      <p className="cadence-active">Cadence : {cadenceLabel}</p>
-      {afficherNoirEnHaut ? (
-        <>
-          {horlogeNoir}
-          {horlogeBlanc}
-        </>
-      ) : (
-        <>
-          {horlogeBlanc}
-          {horlogeNoir}
-        </>
-      )}
+      <div className="horloges-rangee">
+        {afficherNoirEnHaut ? (
+          <>
+            {horlogeNoir}
+            {horlogeBlanc}
+          </>
+        ) : (
+          <>
+            {horlogeBlanc}
+            {horlogeNoir}
+          </>
+        )}
+      </div>
+      <span className="cadence-active">Cadence : {cadenceLabel}</span>
     </div>
   );
 }

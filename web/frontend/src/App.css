@@ -1,31 +1,31 @@
 .app {
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 1rem 1.5rem;
 }
 
 .entete {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   border-bottom: 1px solid var(--gv-bordure);
-  padding-bottom: 1rem;
+  padding-bottom: 0.65rem;
 }
 
 .entete-marque {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .logo-geass {
-  width: 64px;
-  height: 64px;
+  width: 46px;
+  height: 46px;
   object-fit: contain;
   filter: drop-shadow(0 0 10px rgba(224, 16, 47, 0.7));
 }
 
 .entete h1 {
-  margin: 0 0 0.15rem;
-  font-size: 2rem;
+  margin: 0 0 0.1rem;
+  font-size: 1.6rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   background: linear-gradient(90deg, #fff, var(--gv-rouge-clair));
@@ -42,7 +42,7 @@
 }
 
 .pied {
-  margin-top: 2.5rem;
+  margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--gv-bordure);
   display: flex;
@@ -63,31 +63,61 @@
   text-decoration: underline;
 }
 
+.vue-configuration {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 0.5rem;
+}
+
+.barre-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.barre-controles .bouton-menu {
+  align-self: auto;
+}
+
+.bouton-verrou {
+  background: #241019;
+  border: 1px solid var(--gv-bordure);
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  margin-left: auto;
+}
+
+.bouton-verrou.actif {
+  background: linear-gradient(180deg, var(--gv-rouge), var(--gv-rouge-sombre));
+  border-color: var(--gv-rouge);
+}
+
 .nav-rapide {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
+  gap: 0.4rem;
 }
 
 .nav-rapide button {
   background: #241019;
   border: 1px solid var(--gv-bordure);
-  padding: 0.4rem 0.8rem;
-  font-size: 0.9rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .nav-rapide-pos {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--gv-texte-doux);
-  min-width: 9rem;
+  min-width: 5.5rem;
   text-align: center;
 }
 
 .partie {
   display: grid;
-  grid-template-columns: minmax(280px, 560px) 1fr;
+  grid-template-columns: minmax(280px, 540px) 1fr;
   gap: 1.5rem;
   align-items: start;
 }
@@ -95,8 +125,10 @@
 .colonne-plateau {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  max-width: 560px;
+  gap: 0.6rem;
+  max-width: 540px;
+  position: sticky;
+  top: 0.75rem;
 }
 
 .configuration {
@@ -316,20 +348,26 @@
 .horloges {
   display: flex;
   flex-direction: column;
+  gap: 0.25rem;
+}
+
+.horloges-rangee {
+  display: flex;
   gap: 0.5rem;
 }
 
 .cadence-active {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   color: #9aa0a6;
 }
 
 .horloge {
+  flex: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.65rem 1rem;
+  padding: 0.4rem 0.75rem;
   background: var(--gv-panneau);
   border-radius: 8px;
   border: 2px solid transparent;
@@ -343,12 +381,12 @@
 }
 
 .horloge-label {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #9aa0a6;
 }
 
 .horloge-temps {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
@@ -357,12 +395,22 @@
   .partie {
     grid-template-columns: 1fr;
   }
+
+  .colonne-plateau,
+  .panneau {
+    position: static;
+    max-height: none;
+  }
+
+  .plateau {
+    max-width: 540px;
+  }
 }
 
 .plateau {
   flex: 1;
   width: 100%;
-  max-width: 560px;
+  max-width: min(540px, calc(100vh - 190px));
   aspect-ratio: 1;
   border-radius: 12px;
   overflow: hidden;
@@ -373,6 +421,7 @@
   display: flex;
   gap: 0.5rem;
   align-items: stretch;
+  justify-content: center;
   max-width: 580px;
 }
 
@@ -388,7 +437,7 @@
   position: relative;
   flex: 1;
   width: 100%;
-  min-height: 280px;
+  min-height: 200px;
   background: #0a0a0e;
   border: 1px solid #3a2030;
   border-radius: 6px;
@@ -674,14 +723,19 @@
   border: 1px solid var(--gv-bordure);
   border-radius: 12px;
   padding: 1.25rem;
+  position: sticky;
+  top: 0.75rem;
+  max-height: calc(100vh - 1.5rem);
+  overflow-y: auto;
 }
 
 .panneau h2 {
   margin-top: 0;
+  margin-bottom: 0.5rem;
 }
 
 .panneau p {
-  margin: 0.5rem 0;
+  margin: 0.4rem 0;
 }
 
 .statut {

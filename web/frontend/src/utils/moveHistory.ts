@@ -13,11 +13,15 @@ export function fenDepuisHistorique(
   const limite = Math.min(jusquA, coups.length);
   for (let i = 0; i < limite; i += 1) {
     const uci = coups[i];
-    echecs.move({
-      from: uci.slice(0, 2),
-      to: uci.slice(2, 4),
-      promotion: uci.length > 4 ? uci[4] : undefined,
-    });
+    try {
+      echecs.move({
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci.length > 4 ? uci[4] : undefined,
+      });
+    } catch {
+      break;
+    }
   }
   return echecs.fen();
 }
