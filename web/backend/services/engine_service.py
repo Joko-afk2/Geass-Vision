@@ -43,6 +43,7 @@ class EtatPartie:
     is_game_over: bool
     result: str | None
     is_human_turn: bool
+    result_reason: str | None = None
 
 
 @dataclass
@@ -54,6 +55,7 @@ class ResultatCoup:
     engine_move: str | None
     is_game_over: bool
     result: str | None
+    result_reason: str | None = None
 
 
 @dataclass
@@ -93,15 +95,38 @@ def _nom_couleur(couleur: chess.Color) -> str:
 
 
 def _resultat_partie(board: chess.Board) -> str | None:
+    """Score de la partie ('1-0', '0-1', '1/2-1/2') ou None si en cours."""
     if board.is_checkmate():
         return "0-1" if board.turn == chess.WHITE else "1-0"
     if (
         board.is_stalemate()
         or board.is_insufficient_material()
-        or board.is_seventyfive_moves()
+        or board.is_repetition(3)  # triple répétition de position
+        or board.is_fifty_moves()  # 50 coups sans prise ni poussée de pion
         or board.is_fivefold_repetition()
+        or board.is_seventyfive_moves()
     ):
         return "1/2-1/2"
+    return None
+
+
+def _motif_fin(board: chess.Board) -> str | None:
+    """Raison lisible de la fin de partie (None si la partie continue)."""
+    if board.is_checkmate():
+        gagnant = "Noirs" if board.turn == chess.WHITE else "Blancs"
+        return f"Échec et mat — victoire des {gagnant}"
+    if board.is_stalemate():
+        return "Pat — partie nulle"
+    if board.is_insufficient_material():
+        return "Matériel insuffisant — partie nulle"
+    if board.is_repetition(3):
+        return "Partie nulle par triple répétition"
+    if board.is_fifty_moves():
+        return "Partie nulle (règle des 50 coups)"
+    if board.is_fivefold_repetition():
+        return "Partie nulle par quintuple répétition"
+    if board.is_seventyfive_moves():
+        return "Partie nulle (règle des 75 coups)"
     return None
 
 
@@ -354,6 +379,7 @@ class ServiceMoteur:
             engine_move=coup_moteur,
             is_game_over=_resultat_partie(board) is not None,
             result=_resultat_partie(board),
+            result_reason=_motif_fin(board),
         )
 
     def _obtenir_partie(self, game_id: str) -> Partie:
@@ -385,6 +411,7 @@ class ServiceMoteur:
             result=_resultat_partie(board),
             is_human_turn=board.turn == partie.couleur_humain
             and _resultat_partie(board) is None,
+            result_reason=_motif_fin(board),
         )
 
 

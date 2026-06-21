@@ -179,7 +179,12 @@ def _evaluer_terminal(board: chess.Board, profondeur: int, cle: int | None = Non
     if board.is_checkmate():
         return -SCORE_MAT + profondeur if board.turn == chess.WHITE else SCORE_MAT - profondeur
 
-    if board.is_stalemate() or board.is_insufficient_material():
+    if (
+        board.is_stalemate()
+        or board.is_insufficient_material()
+        or board.is_fivefold_repetition()
+        or board.is_seventyfive_moves()
+    ):
         return 0
 
     return _evaluer_position(board, cle)
@@ -471,6 +476,16 @@ def alpha_beta(
 
     if cle is None:
         cle = zobrist.hash_initial(board)
+
+    # Détection de nulle par répétition : dès qu'une position réapparaît dans
+    # l'arbre (hors racine), on la traite comme nulle. Cela évite que le moteur
+    # gâche un avantage en répétant, et lui permet de viser la nulle s'il est
+    # en difficulté. Le garde halfmove_clock rend ce test quasi gratuit hors
+    # finales tranquilles (une répétition exige >= 4 demi-coups).
+    if niveau > 1 and board.halfmove_clock >= 4 and board.is_repetition(2):
+        if pv is not None:
+            pv.clear()
+        return 0
 
     # Extension d'échec : on prolonge la recherche tant que le camp est en échec.
     en_echec = extensions_actives and board.is_check()

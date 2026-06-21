@@ -118,7 +118,7 @@ export function ChessGame() {
     setFen(etat.fen);
     setEvaluation(etat.evaluation);
     setPartieTerminee(etat.is_game_over);
-    setResultat(etat.result);
+    setResultat(etat.result_reason ?? etat.result);
     return etat;
   }, []);
 
@@ -233,7 +233,7 @@ export function ChessGame() {
       setCouleurHumain(donnees.human_color);
       setEvaluation(donnees.evaluation);
       setPartieTerminee(donnees.is_game_over);
-      setResultat(donnees.result);
+      setResultat(donnees.result_reason ?? donnees.result);
       setDernierCoupMoteur(donnees.engine_move);
       setEnConfiguration(false);
       setErreur(null);

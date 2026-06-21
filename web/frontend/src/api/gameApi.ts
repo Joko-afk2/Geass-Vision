@@ -8,6 +8,7 @@ export interface NouvellePartieReponse {
   engine_move: string | null;
   is_game_over: boolean;
   result: string | null;
+  result_reason: string | null;
   is_human_turn: boolean;
 }
 
@@ -19,6 +20,7 @@ export interface CoupReponse {
   engine_move: string | null;
   is_game_over: boolean;
   result: string | null;
+  result_reason: string | null;
 }
 
 export interface EtatPartie {
@@ -31,6 +33,7 @@ export interface EtatPartie {
   moves: string[];
   is_game_over: boolean;
   result: string | null;
+  result_reason: string | null;
   is_human_turn: boolean;
 }
 

@@ -18,9 +18,13 @@ def afficher_plateau(board: chess.Board) -> None:
     if board.is_checkmate():
         print("Échec et mat.")
     elif board.is_stalemate():
-        print("Pat.")
+        print("Pat — partie nulle.")
     elif board.is_insufficient_material():
         print("Matériel insuffisant — partie nulle.")
+    elif board.is_repetition(3):
+        print("Triple répétition — partie nulle.")
+    elif board.is_fifty_moves():
+        print("Règle des 50 coups — partie nulle.")
 
 
 def coup_moteur(moteur: MoteurEchecs, board: chess.Board) -> chess.Move:
@@ -90,7 +94,7 @@ def jouer_partie(elo: int | None = None) -> None:
     print(f"Vous jouez les Blancs. Niveau moteur : {elo} Elo.")
     print("Entrez vos coups en notation UCI (ex. e2e4).")
 
-    while not board.is_game_over():
+    while not board.is_game_over(claim_draw=True):
         afficher_plateau(board)
 
         if board.turn == chess.WHITE:
@@ -105,7 +109,7 @@ def jouer_partie(elo: int | None = None) -> None:
         board.push(coup)
 
     afficher_plateau(board)
-    print(f"Résultat : {board.result()}")
+    print(f"Résultat : {board.result(claim_draw=True)}")
 
 
 def main() -> None:

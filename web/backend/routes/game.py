@@ -32,6 +32,7 @@ class NouvellePartieReponse(BaseModel):
     engine_move: str | None = None
     is_game_over: bool
     result: str | None = None
+    result_reason: str | None = None
     is_human_turn: bool
 
 
@@ -47,6 +48,7 @@ class CoupReponse(BaseModel):
     engine_move: str | None = None
     is_game_over: bool
     result: str | None = None
+    result_reason: str | None = None
 
 
 class EtatReponse(BaseModel):
@@ -59,6 +61,7 @@ class EtatReponse(BaseModel):
     moves: list[str]
     is_game_over: bool
     result: str | None = None
+    result_reason: str | None = None
     is_human_turn: bool
 
 
@@ -117,6 +120,7 @@ def _reponse_nouvelle_partie(partie, coup_moteur, service) -> NouvellePartieRepo
         engine_move=coup_moteur,
         is_game_over=etat.is_game_over,
         result=etat.result,
+        result_reason=etat.result_reason,
         is_human_turn=etat.is_human_turn,
     )
 
@@ -217,6 +221,7 @@ def jouer_coup(
         engine_move=resultat.engine_move,
         is_game_over=resultat.is_game_over,
         result=resultat.result,
+        result_reason=resultat.result_reason,
     )
 
 
@@ -240,6 +245,7 @@ def etat_partie(
         moves=etat.moves,
         is_game_over=etat.is_game_over,
         result=etat.result,
+        result_reason=etat.result_reason,
         is_human_turn=etat.is_human_turn,
     )
 
