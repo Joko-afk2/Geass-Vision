@@ -173,6 +173,26 @@ BONUS_ROQUE = 25
 BONUS_BOUCLIER_PION = 8
 COEF_MOBILITE = 2
 
+# --- Principes d'ouverture / milieu de partie (S18) ---
+# Ces termes encodent les « bases » des échecs pour compenser la faible
+# profondeur de recherche : ils s'estompent en finale (pondérés par la phase).
+BONUS_DEVELOPPEMENT = 12       # par pièce mineure développée hors de sa case de départ
+MALUS_DAME_PRECOCE = 30        # dame sortie alors que ≥ 2 mineures dorment encore
+MALUS_ROI_CENTRE = 30          # roi coincé au centre sans droit de roque
+MALUS_CAVALIER_BORD = 12       # « cavalier au bord, cavalier mort »
+MALUS_COLONNE_ROI_OUVERTE = 12 # colonne sans pion devant le roi roqué
+MALUS_PION_BOUCLIER_AVANCE = 8 # par rang d'avance d'un pion du bouclier roqué
+
+_MINEURS_DEPART = {
+    chess.WHITE: chess.BB_B1 | chess.BB_C1 | chess.BB_F1 | chess.BB_G1,
+    chess.BLACK: chess.BB_B8 | chess.BB_C8 | chess.BB_F8 | chess.BB_G8,
+}
+_DAME_DEPART = {chess.WHITE: chess.BB_D1, chess.BLACK: chess.BB_D8}
+_DROITS_ROQUE = {
+    chess.WHITE: chess.BB_A1 | chess.BB_H1,
+    chess.BLACK: chess.BB_A8 | chess.BB_H8,
+}
+
 # Malus pour une pièce clouée (absolument, sur le roi) : elle ne peut pas
 # bouger et défend mal, ce qui ouvre des tactiques (fourchettes, gains).
 MALUS_CLOUAGE: dict[chess.PieceType, int] = {
@@ -658,6 +678,80 @@ def _evaluer_tours_finale(board: chess.Board) -> int:
     return score
 
 
+def _malus_tempete_pions(board: chess.Board, couleur: chess.Color) -> int:
+    """Pénalise les pions du bouclier qui avancent / les colonnes ouvertes devant
+    un roi roqué (« ne pas pousser les pions du côté du roi »)."""
+    roi = board.king(couleur)
+    if roi is None:
+        return 0
+    fichier_roi = chess.square_file(roi)
+    if fichier_roi >= 5:        # roi côté roi (f, g, h)
+        fichiers = (5, 6, 7)
+    elif fichier_roi <= 2:      # roi côté dame (a, b, c)
+        fichiers = (0, 1, 2)
+    else:                        # roi au centre : pas de bouclier à juger ici
+        return 0
+
+    pions = board.pawns & board.occupied_co[couleur]
+    rang_depart = 1 if couleur == chess.WHITE else 6
+    malus = 0
+    for fichier in fichiers:
+        colonne = pions & chess.BB_FILES[fichier]
+        if not colonne:
+            malus += MALUS_COLONNE_ROI_OUVERTE
+            continue
+        cases = chess.scan_forward(colonne) if couleur == chess.WHITE else chess.scan_reversed(colonne)
+        case_proche = next(cases)
+        avance = abs(chess.square_rank(case_proche) - rang_depart)
+        if avance >= 2:
+            malus += MALUS_PION_BOUCLIER_AVANCE * (avance - 1)
+    return malus
+
+
+def _principes_camp(board: chess.Board, couleur: chess.Color) -> int:
+    """Score des principes d'ouverture pour un camp (perspective de ce camp)."""
+    occupe = board.occupied_co[couleur]
+    mineurs = (board.knights | board.bishops) & occupe
+    non_developpees = chess.popcount(mineurs & _MINEURS_DEPART[couleur])
+    developpees = chess.popcount(mineurs) - non_developpees
+
+    score = developpees * BONUS_DEVELOPPEMENT
+
+    # Dame sortie trop tôt, pièces mineures encore endormies.
+    dame = board.queens & occupe
+    if dame and not (dame & _DAME_DEPART[couleur]) and non_developpees >= 2:
+        score -= MALUS_DAME_PRECOCE
+
+    # Cavalier au bord (colonnes a et h).
+    cavaliers_bord = chess.popcount(
+        board.knights & occupe & (chess.BB_FILE_A | chess.BB_FILE_H)
+    )
+    score -= cavaliers_bord * MALUS_CAVALIER_BORD
+
+    # Roi resté au centre alors qu'il ne peut plus roquer.
+    roi = board.king(couleur)
+    if roi is not None and chess.square_file(roi) in (3, 4):
+        if not (board.castling_rights & _DROITS_ROQUE[couleur]):
+            score -= MALUS_ROI_CENTRE
+
+    score -= _malus_tempete_pions(board, couleur)
+    return score
+
+
+def evaluer_principes(board: chess.Board, facteur: int | None = None) -> int:
+    """
+    Encode les principes de base (développement, sécurité du roi, cavalier au
+    bord, dame précoce). Pondéré par la phase : nul en finale, plein en ouverture.
+    """
+    if facteur is None:
+        facteur = _facteur_finale(board)
+    poids = 256 - facteur
+    if poids <= 0:
+        return 0
+    brut = _principes_camp(board, chess.WHITE) - _principes_camp(board, chess.BLACK)
+    return brut * poids // 256
+
+
 def evaluer_finale(board: chess.Board, facteur: int | None = None) -> int:
     if est_finale_roi_pion(board):
         return _evaluer_roi_pion_finale(board)
@@ -704,6 +798,7 @@ def evaluer_noyau(board: chess.Board, facteur: int | None = None) -> int:
         + _evaluer_centre(board)
         + evaluer_paire_fous(board)
         + evaluer_colonnes_ouvertes(board)
+        + evaluer_principes(board, facteur)
         + evaluer_finale(board, facteur)
     )
 
