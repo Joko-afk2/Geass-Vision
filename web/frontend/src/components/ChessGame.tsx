@@ -34,6 +34,7 @@ import { GameReview } from "./GameReview";
 import { GameSetup } from "./GameSetup";
 import { GameTimer } from "./GameTimer";
 import { MoveHistory } from "./MoveHistory";
+import { PromotionDialog, type TypePromotion } from "./PromotionDialog";
 
 function estTourHumain(
   fen: string,
@@ -90,6 +91,10 @@ export function ChessGame() {
   const [caseSelectionnee, setCaseSelectionnee] = useState<string | null>(null);
   const [fenDepart, setFenDepart] = useState<string | undefined>(undefined);
   const [verrouille, setVerrouille] = useState(false);
+  const [promotionEnAttente, setPromotionEnAttente] = useState<{
+    depart: string;
+    arrivee: string;
+  } | null>(null);
 
   const enRevue = plyVue !== null;
   const fenPlateau = enRevue
@@ -292,6 +297,7 @@ export function ChessGame() {
     setCaseSelectionnee(null);
     setFenDepart(undefined);
     setVerrouille(false);
+    setPromotionEnAttente(null);
   };
 
   const envoyerCoup = async (uci: string) => {
@@ -326,13 +332,27 @@ export function ChessGame() {
       ((piece.color === "w" && arrivee[1] === "8") ||
         (piece.color === "b" && arrivee[1] === "1"));
 
+    if (estPromotion) {
+      const test = new Chess(fenPourChess(fen));
+      let legal = false;
+      try {
+        legal = Boolean(
+          test.move({ from: depart, to: arrivee, promotion: "q" }),
+        );
+      } catch {
+        legal = false;
+      }
+      if (!legal) {
+        return false;
+      }
+      setCaseSelectionnee(null);
+      setPromotionEnAttente({ depart, arrivee });
+      return false;
+    }
+
     let coup: ReturnType<Chess["move"]> | null = null;
     try {
-      coup = echecs.move({
-        from: depart,
-        to: arrivee,
-        promotion: estPromotion ? "q" : undefined,
-      });
+      coup = echecs.move({ from: depart, to: arrivee });
     } catch {
       coup = null;
     }
@@ -346,6 +366,28 @@ export function ChessGame() {
     setCaseSelectionnee(null);
     void envoyerCoup(uci);
     return true;
+  };
+
+  const finaliserPromotion = (type: TypePromotion) => {
+    if (!promotionEnAttente) {
+      return;
+    }
+    const { depart, arrivee } = promotionEnAttente;
+    setPromotionEnAttente(null);
+
+    const echecs = new Chess(fenPourChess(fen));
+    let coup: ReturnType<Chess["move"]> | null = null;
+    try {
+      coup = echecs.move({ from: depart, to: arrivee, promotion: type });
+    } catch {
+      coup = null;
+    }
+    if (!coup) {
+      return;
+    }
+    const uci = `${coup.from}${coup.to}${coup.promotion ?? ""}`;
+    setFen(echecs.fen());
+    void envoyerCoup(uci);
   };
 
   const onPieceDrop = (sourceSquare: string, targetSquare: string): boolean => {
@@ -478,6 +520,13 @@ export function ChessGame() {
               customDarkSquareStyle={{ backgroundColor: COULEUR_CASE_SOMBRE }}
               customPieces={PIECES_PERSONNALISEES}
             />
+            {promotionEnAttente && (
+              <PromotionDialog
+                couleur={couleurHumain === "white" ? "w" : "b"}
+                onChoisir={finaliserPromotion}
+                onAnnuler={() => setPromotionEnAttente(null)}
+              />
+            )}
           </div>
         </div>
       </div>
