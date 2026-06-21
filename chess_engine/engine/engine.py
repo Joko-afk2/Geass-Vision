@@ -16,6 +16,9 @@ from chess_engine.engine.search import (
 )
 from chess_engine.engine.time_manager import GestionnaireTemps
 
+# Budget par défaut (secondes) quand aucun temps n'est imposé explicitement.
+BUDGET_DEFAUT_SECONDES = 2.0
+
 
 @dataclass(frozen=True)
 class ParametresNiveau:
@@ -30,15 +33,19 @@ class ParametresNiveau:
     pvs: bool
 
 
+# profondeur_max est désormais un *plafond* : la recherche est bornée en temps
+# (approfondissement itératif). Les niveaux faibles gardent un plafond bas pour
+# rester accessibles ; les niveaux forts laissent le temps décider de la
+# profondeur réellement atteinte.
 PALIERS: tuple[ParametresNiveau, ...] = (
     ParametresNiveau(1, 1, 250, 0.92, 16, False, False, False, False),
-    ParametresNiveau(200, 1, 60, 0.55, 6, True, False, False, False),
-    ParametresNiveau(500, 2, 90, 0.40, 5, False, True, False, False),
-    ParametresNiveau(800, 3, 55, 0.28, 4, False, True, False, False),
-    ParametresNiveau(1200, 4, 30, 0.18, 3, False, True, True, False),
-    ParametresNiveau(1500, 4, 18, 0.10, 2, False, True, True, True),
-    ParametresNiveau(1800, 4, 8, 0.05, 1, False, True, True, True),
-    ParametresNiveau(2000, 4, 0, 0.0, 1, False, True, True, True),
+    ParametresNiveau(200, 2, 60, 0.55, 6, True, False, False, False),
+    ParametresNiveau(500, 3, 90, 0.40, 5, False, True, False, False),
+    ParametresNiveau(800, 4, 55, 0.28, 4, False, True, True, False),
+    ParametresNiveau(1200, 6, 30, 0.18, 3, False, True, True, True),
+    ParametresNiveau(1500, 10, 18, 0.08, 2, False, True, True, True),
+    ParametresNiveau(1800, 16, 8, 0.03, 1, False, True, True, True),
+    ParametresNiveau(2000, 64, 0, 0.0, 1, False, True, True, True),
 )
 
 
@@ -142,6 +149,11 @@ class MoteurEchecs:
 
         parametres = self.parametres
         self._appliquer_parametres()
+
+        # Sécurité : sans budget ni gestionnaire de temps, on borne malgré tout
+        # la recherche (le plafond de profondeur peut être très élevé).
+        if budget_secondes is None and gestionnaire is None:
+            budget_secondes = BUDGET_DEFAUT_SECONDES
 
         try:
             if random.random() < parametres.proba_gaffe:

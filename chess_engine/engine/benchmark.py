@@ -11,9 +11,11 @@ from chess_engine.engine import search
 FEN_BENCHMARK = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
 PROFONDEUR_BENCHMARK = 4
 
-# Référence avant optimisations S17 (profondeur 4, livre désactivé) : ~2500 n/s en isolation.
-# En suite complète pytest, le débit baisse ; on vérifie surtout le nombre de nœuds et la durée max.
-NOEUDS_MIN_ATTENDUS = 5_000
+# L'élagage avancé (LMR, extensions d'échec, SEE en quiescence) réduit fortement
+# le nombre de nœuds explorés à profondeur égale : c'est précisément le gain de
+# force recherché. On vérifie donc surtout qu'une recherche réelle a lieu et que
+# la durée reste bornée, avec un plancher de nœuds prudent.
+NOEUDS_MIN_ATTENDUS = 1_500
 DUREE_MAX_SEC = 10.0
 
 

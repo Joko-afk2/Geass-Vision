@@ -173,6 +173,15 @@ BONUS_ROQUE = 25
 BONUS_BOUCLIER_PION = 8
 COEF_MOBILITE = 2
 
+# Malus pour une pièce clouée (absolument, sur le roi) : elle ne peut pas
+# bouger et défend mal, ce qui ouvre des tactiques (fourchettes, gains).
+MALUS_CLOUAGE: dict[chess.PieceType, int] = {
+    chess.KNIGHT: 14,
+    chess.BISHOP: 14,
+    chess.ROOK: 18,
+    chess.QUEEN: 8,
+}
+
 # --- Finales (S13) ---
 
 BONUS_KP_AVANCE = (0, 10, 25, 50, 90, 150, 280, 0)
@@ -411,6 +420,18 @@ def evaluer_structure_pions(board: chess.Board) -> int:
                 if couleur == chess.BLACK:
                     bonus = BONUS_PION_PASSE + (7 - chess.square_rank(case)) * 4
                 score += signe * bonus
+    return score
+
+
+def evaluer_clouages(board: chess.Board) -> int:
+    """Pénalise les pièces clouées sur leur propre roi (liabilités tactiques)."""
+    score = 0
+    for couleur in chess.COLORS:
+        signe = 1 if couleur == chess.WHITE else -1
+        for piece_type, malus in MALUS_CLOUAGE.items():
+            for case in board.pieces(piece_type, couleur):
+                if board.is_pinned(couleur, case):
+                    score -= signe * malus
     return score
 
 

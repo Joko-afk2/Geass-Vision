@@ -7,7 +7,7 @@ import time
 
 import chess
 
-from chess_engine.engine.evaluation import evaluer
+from chess_engine.engine.evaluation import VALEURS_PIECE, evaluer
 from chess_engine.engine.move_ordering import OrdonnancementCoups
 from chess_engine.engine.opening_book import livre_actif, livre_ouvertures
 from chess_engine.engine.time_manager import GestionnaireTemps
@@ -18,6 +18,84 @@ SCORE_MAT = 100_000
 PROFONDEUR_MAX = 32
 PROFONDEUR_QUIESCENCE_MAX = 12
 REDUCTION_NULL_MOVE = 3
+
+# Élagage SEE des captures perdantes en quiescence.
+see_actif = True
+# Late Move Reductions (LMR) : on réduit la profondeur des coups tranquilles tardifs.
+lmr_actif = True
+LMR_PROFONDEUR_MIN = 3
+LMR_INDICE_MIN = 3
+# Extensions d'échec : on prolonge la recherche quand le camp au trait est en échec.
+extensions_actives = True
+EXTENSION_MAX = 3
+
+
+def _valeur_piece(piece_type: chess.PieceType) -> int:
+    return VALEURS_PIECE.get(piece_type, 0)
+
+
+def _capture_la_moins_chere(board: chess.Board, case: chess.Square) -> chess.Move | None:
+    """Coup de capture **légal** le moins cher vers `case` (respecte les clouages)."""
+    couleur = board.turn
+    meilleur_coup: chess.Move | None = None
+    meilleure_valeur: int | None = None
+    for source in board.attackers(couleur, case):
+        piece = board.piece_at(source)
+        if piece is None:
+            continue
+        promotion = None
+        if piece.piece_type == chess.PAWN and chess.square_rank(case) in (0, 7):
+            promotion = chess.QUEEN
+        coup = chess.Move(source, case, promotion=promotion)
+        if not board.is_legal(coup):
+            continue
+        valeur = _valeur_piece(piece.piece_type)
+        if meilleure_valeur is None or valeur < meilleure_valeur:
+            meilleure_valeur = valeur
+            meilleur_coup = coup
+    return meilleur_coup
+
+
+def _see_sur_case(board: chess.Board, case: chess.Square, valeur_sur_case: int) -> int:
+    """Gain optimal du camp au trait en reprenant sur `case` (récursif, clouage compris)."""
+    reprise = _capture_la_moins_chere(board, case)
+    if reprise is None:
+        return 0
+    attaquant = board.piece_at(reprise.from_square)
+    valeur_attaquant = _valeur_piece(attaquant.piece_type) if attaquant else 0
+    board.push(reprise)
+    gain = valeur_sur_case - _see_sur_case(board, case, valeur_attaquant)
+    board.pop()
+    # Le camp au trait peut refuser l'échange s'il est défavorable.
+    return max(0, gain)
+
+
+def see_capture(board: chess.Board, coup: chess.Move) -> int:
+    """
+    Static Exchange Evaluation : gain net (centipions) d'une capture, en
+    n'utilisant que des reprises **légales**. Une pièce clouée ne peut donc
+    pas reprendre — ce qui corrige les bévues sur pièces clouées.
+    """
+    case = coup.to_square
+    if board.is_en_passant(coup):
+        valeur_victime = VALEURS_PIECE[chess.PAWN]
+    else:
+        victime = board.piece_at(case)
+        valeur_victime = _valeur_piece(victime.piece_type) if victime else 0
+
+    attaquant = board.piece_at(coup.from_square)
+    if attaquant is None:
+        return valeur_victime
+    valeur_sur_case = _valeur_piece(attaquant.piece_type)
+    if coup.promotion is not None:
+        gain_promo = _valeur_piece(coup.promotion) - VALEURS_PIECE[chess.PAWN]
+        valeur_victime += gain_promo
+        valeur_sur_case = _valeur_piece(coup.promotion)
+
+    board.push(coup)
+    resultat = valeur_victime - _see_sur_case(board, case, valeur_sur_case)
+    board.pop()
+    return resultat
 
 # Compteurs de nœuds explorés (utiles pour comparer minimax vs alpha-beta).
 noeuds_minimax = 0
@@ -46,6 +124,8 @@ TAILLE_MAX_CACHE_EVAL = 200_000
 gestionnaire_temps_actif: GestionnaireTemps | None = None
 recherche_interrompue = False
 derniere_profondeur_complete = 0
+# Profondeur racine entièrement complétée lors du dernier appel itératif (diagnostic).
+derniere_profondeur_iterative = 0
 
 
 def reinitialiser_compteurs() -> None:
@@ -146,7 +226,26 @@ def _coups_quiescence(
     niveau: int,
     coup_tt: chess.Move | None = None,
 ) -> list[chess.Move]:
-    tactiques = [c for c in board.legal_moves if _est_coup_tactique(board, c)]
+    tactiques: list[chess.Move] = []
+    for coup in board.legal_moves:
+        if not _est_coup_tactique(board, coup):
+            continue
+        # On élague les captures clairement perdantes (SEE < 0). La SEE n'est
+        # calculée que lorsqu'on prend avec une pièce plus chère que la victime
+        # (seul cas potentiellement perdant), afin de rester rapide.
+        if see_actif and board.is_capture(coup) and coup.promotion is None:
+            attaquant = board.piece_at(coup.from_square)
+            victime = board.piece_at(coup.to_square)
+            val_attaquant = _valeur_piece(attaquant.piece_type) if attaquant else 0
+            val_victime = (
+                _valeur_piece(victime.piece_type)
+                if victime
+                else VALEURS_PIECE[chess.PAWN]
+            )
+            if val_attaquant > val_victime and see_capture(board, coup) < 0:
+                continue
+        tactiques.append(coup)
+
     if ordonnancement_actif:
         return ordonnancement.ordonner(board, tactiques, niveau, coup_tt)
     return tactiques
@@ -324,6 +423,28 @@ def minimax(board: chess.Board, profondeur: int) -> int:
     return pire
 
 
+def _reduction_lmr(
+    board: chess.Board,
+    coup: chess.Move,
+    profondeur: int,
+    indice: int,
+    en_echec: bool,
+) -> int:
+    """Réduction de profondeur pour les coups tranquilles tardifs (LMR)."""
+    if not lmr_actif:
+        return 0
+    if profondeur < LMR_PROFONDEUR_MIN or indice < LMR_INDICE_MIN:
+        return 0
+    if en_echec:
+        return 0
+    # Coups tranquilles uniquement (les captures/promotions gardent leur profondeur).
+    # On évite volontairement un test d'échec coûteux (push/pop) : la re-recherche
+    # PVS à pleine profondeur rattrape les rares coups réduits à tort.
+    if board.is_capture(coup) or coup.promotion is not None:
+        return 0
+    return 2 if indice >= 6 else 1
+
+
 def alpha_beta(
     board: chess.Board,
     profondeur: int,
@@ -332,9 +453,10 @@ def alpha_beta(
     niveau: int = 1,
     cle: int | None = None,
     pv: list[chess.Move] | None = None,
+    extensions_utilisees: int = 0,
 ) -> int:
     """
-    Alpha-beta avec PVS (Principal Variation Search).
+    Alpha-beta avec PVS (Principal Variation Search), extensions d'échec et LMR.
     niveau = profondeur depuis la racine (pour killers / history).
     pv = liste remplie avec la ligne principale de ce sous-arbre.
     """
@@ -349,6 +471,16 @@ def alpha_beta(
 
     if cle is None:
         cle = zobrist.hash_initial(board)
+
+    # Extension d'échec : on prolonge la recherche tant que le camp est en échec.
+    en_echec = extensions_actives and board.is_check()
+    if (
+        en_echec
+        and extensions_utilisees < EXTENSION_MAX
+        and not board.is_game_over()
+    ):
+        profondeur += 1
+        extensions_utilisees += 1
 
     if profondeur == 0 or board.is_game_over():
         if board.is_game_over():
@@ -374,7 +506,8 @@ def alpha_beta(
         cle_null = _hash_null_move(cle)
         prof_null = profondeur - 1 - REDUCTION_NULL_MOVE
         score_null = alpha_beta(
-            board, prof_null, alpha, beta, niveau + 1, cle_null
+            board, prof_null, alpha, beta, niveau + 1, cle_null,
+            extensions_utilisees=extensions_utilisees,
         )
         board.pop()
 
@@ -394,21 +527,30 @@ def alpha_beta(
     if board.turn == chess.WHITE:
         valeur = -SCORE_MAT * 2
         for indice, coup in enumerate(coups):
+            reduction = _reduction_lmr(board, coup, profondeur, indice, en_echec)
             cle_fils = zobrist.appliquer_coup(cle, board, coup)
             board.push(coup)
             ligne_fils: list[chess.Move] = []
 
             if not pvs_actif or indice == 0:
                 score = alpha_beta(
-                    board, profondeur - 1, alpha, beta, niveau + 1, cle_fils, ligne_fils
+                    board, profondeur - 1, alpha, beta, niveau + 1, cle_fils, ligne_fils,
+                    extensions_utilisees,
                 )
             else:
                 score = alpha_beta(
-                    board, profondeur - 1, alpha, alpha + 1, niveau + 1, cle_fils
+                    board, profondeur - 1 - reduction, alpha, alpha + 1,
+                    niveau + 1, cle_fils, None, extensions_utilisees,
                 )
+                if reduction and score > alpha:
+                    score = alpha_beta(
+                        board, profondeur - 1, alpha, alpha + 1,
+                        niveau + 1, cle_fils, None, extensions_utilisees,
+                    )
                 if alpha < score < beta:
                     score = alpha_beta(
-                        board, profondeur - 1, alpha, beta, niveau + 1, cle_fils, ligne_fils
+                        board, profondeur - 1, alpha, beta, niveau + 1, cle_fils, ligne_fils,
+                        extensions_utilisees,
                     )
 
             board.pop()
@@ -423,21 +565,30 @@ def alpha_beta(
     else:
         valeur = SCORE_MAT * 2
         for indice, coup in enumerate(coups):
+            reduction = _reduction_lmr(board, coup, profondeur, indice, en_echec)
             cle_fils = zobrist.appliquer_coup(cle, board, coup)
             board.push(coup)
             ligne_fils: list[chess.Move] = []
 
             if not pvs_actif or indice == 0:
                 score = alpha_beta(
-                    board, profondeur - 1, alpha, beta, niveau + 1, cle_fils, ligne_fils
+                    board, profondeur - 1, alpha, beta, niveau + 1, cle_fils, ligne_fils,
+                    extensions_utilisees,
                 )
             else:
                 score = alpha_beta(
-                    board, profondeur - 1, beta - 1, beta, niveau + 1, cle_fils
+                    board, profondeur - 1 - reduction, beta - 1, beta,
+                    niveau + 1, cle_fils, None, extensions_utilisees,
                 )
+                if reduction and score < beta:
+                    score = alpha_beta(
+                        board, profondeur - 1, beta - 1, beta,
+                        niveau + 1, cle_fils, None, extensions_utilisees,
+                    )
                 if alpha < score < beta:
                     score = alpha_beta(
-                        board, profondeur - 1, alpha, beta, niveau + 1, cle_fils, ligne_fils
+                        board, profondeur - 1, alpha, beta, niveau + 1, cle_fils, ligne_fils,
+                        extensions_utilisees,
                     )
 
             board.pop()
@@ -602,12 +753,13 @@ def scores_coups_racine_iteratif(
     (perspective Blancs). Garantit toujours au moins un résultat (profondeur 1)
     afin qu'un coup soit toujours disponible, même si le budget est minuscule.
     """
-    global gestionnaire_temps_actif, recherche_interrompue
+    global gestionnaire_temps_actif, recherche_interrompue, derniere_profondeur_iterative
 
     coups = _coups_racine_ordonnes(board)
     if not coups:
         return []
 
+    derniere_profondeur_iterative = 0
     garde = _GardeTemps(budget_secondes)
     gestionnaire_temps_actif = garde
 
@@ -644,12 +796,16 @@ def scores_coups_racine_iteratif(
 
             if complet and resultats:
                 meilleurs = resultats
+                derniere_profondeur_iterative = profondeur
                 coups = [
                     coup
                     for coup, _ in sorted(
                         resultats, key=lambda paire: paire[1], reverse=blancs_au_trait
                     )
                 ]
+                # Mat forcé trouvé : inutile d'approfondir davantage.
+                if any(abs(score) >= SCORE_MAT - 1000 for _, score in meilleurs):
+                    break
             else:
                 break
 
