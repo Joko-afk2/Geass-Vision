@@ -25,6 +25,7 @@ import type { ConfigurationPartie } from "../types/gameConfig";
 import { useChessClock } from "../hooks/useChessClock";
 import { fenDepuisHistorique } from "../utils/moveHistory";
 import { fenPourAffichage, fenPourChess } from "../utils/chessFen";
+import { AvantageMateriel } from "./AvantageMateriel";
 import { EvalBar } from "./EvalBar";
 import { GameExport } from "./GameExport";
 import { flechesDepuisSuggestions, Suggestions } from "./Suggestions";
@@ -516,6 +517,7 @@ export function ChessGame() {
             <strong>Dernier coup moteur :</strong> {dernierCoupMoteur}
           </p>
         )}
+        <AvantageMateriel fen={fenPlateau} couleurHumain={couleurHumain} />
         {resultat && (
           <p>
             <strong>Résultat :</strong> {resultat}

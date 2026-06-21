@@ -746,3 +746,51 @@
 .erreur {
   color: #ff6b6b;
 }
+
+.avantage-materiel {
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.avantage-materiel > strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.materiel-egal {
+  color: #9aa0a6;
+  font-style: italic;
+  margin-left: 0.4rem;
+}
+
+.prise-ligne {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 22px;
+  margin: 0.15rem 0;
+}
+
+.prise-label {
+  color: #9aa0a6;
+  min-width: 3.2rem;
+}
+
+.prise-icones {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+}
+
+.prise-icone {
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+
+.prise-avantage {
+  margin-left: 0.3rem;
+  font-weight: 700;
+  color: var(--gv-rouge-clair);
+}
