@@ -203,10 +203,16 @@ def _facteur_finale(board: chess.Board) -> int:
     """
     Retourne un facteur 0 (milieu) à 256 (finale) selon le matériel restant.
     """
-    total = 0
-    for piece_type, valeur in VALEURS_PIECE.items():
-        total += len(board.pieces(piece_type, chess.WHITE)) * valeur
-        total += len(board.pieces(piece_type, chess.BLACK)) * valeur
+    # Comptage par bitboards (popcount) plutôt que par itération de pièces :
+    # beaucoup plus rapide, cette fonction étant appelée à chaque évaluation.
+    popcount = chess.popcount
+    total = (
+        popcount(board.pawns) * VALEUR_PION
+        + popcount(board.knights) * VALEUR_CAVALIER
+        + popcount(board.bishops) * VALEUR_FOU
+        + popcount(board.rooks) * VALEUR_TOUR
+        + popcount(board.queens) * VALEUR_DAME
+    )
 
     # Matériel de départ ≈ 2×(8×100 + 2×320 + 2×330 + 2×500 + 900) sans rois
     if total >= 5000:
@@ -217,11 +223,16 @@ def _facteur_finale(board: chess.Board) -> int:
 
 
 def evaluer_materiel(board: chess.Board) -> int:
-    score = 0
-    for piece_type, valeur in VALEURS_PIECE.items():
-        score += len(board.pieces(piece_type, chess.WHITE)) * valeur
-        score -= len(board.pieces(piece_type, chess.BLACK)) * valeur
-    return score
+    popcount = chess.popcount
+    blancs = board.occupied_co[chess.WHITE]
+    noirs = board.occupied_co[chess.BLACK]
+    return (
+        (popcount(board.pawns & blancs) - popcount(board.pawns & noirs)) * VALEUR_PION
+        + (popcount(board.knights & blancs) - popcount(board.knights & noirs)) * VALEUR_CAVALIER
+        + (popcount(board.bishops & blancs) - popcount(board.bishops & noirs)) * VALEUR_FOU
+        + (popcount(board.rooks & blancs) - popcount(board.rooks & noirs)) * VALEUR_TOUR
+        + (popcount(board.queens & blancs) - popcount(board.queens & noirs)) * VALEUR_DAME
+    )
 
 
 def _pst_piece(
@@ -237,16 +248,20 @@ def _pst_piece(
     return (mg * (256 - facteur_eg) + eg * facteur_eg) // 256
 
 
-def evaluer_pst(board: chess.Board) -> int:
-    facteur_eg = _facteur_finale(board)
+def evaluer_pst(board: chess.Board, facteur_eg: int | None = None) -> int:
+    if facteur_eg is None:
+        facteur_eg = _facteur_finale(board)
+    inv = 256 - facteur_eg
+    scan = chess.scan_forward
     score = 0
     for piece_type in PST_MG:
         table_mg = PST_MG[piece_type]
         table_eg = PST_EG[piece_type]
-        for case in board.pieces(piece_type, chess.WHITE):
-            score += _pst_piece(table_mg, table_eg, case, chess.WHITE, facteur_eg)
-        for case in board.pieces(piece_type, chess.BLACK):
-            score -= _pst_piece(table_mg, table_eg, case, chess.BLACK, facteur_eg)
+        for case in scan(board.pieces_mask(piece_type, chess.WHITE)):
+            score += (table_mg[case] * inv + table_eg[case] * facteur_eg) // 256
+        for case in scan(board.pieces_mask(piece_type, chess.BLACK)):
+            indice = case ^ 56
+            score -= (table_mg[indice] * inv + table_eg[indice] * facteur_eg) // 256
     return score
 
 
@@ -399,27 +414,85 @@ def _pion_arriere(
     return True
 
 
+def _construire_masques_pions() -> tuple[list[int], list[int], list[int], list[int]]:
+    """
+    Précalcule, pour chaque case, des masques bitboard utilisés par l'évaluation
+    de structure de pions (détection O(1) des pions passés et arriérés).
+    """
+    passe_b = [0] * 64
+    passe_n = [0] * 64
+    soutien_b = [0] * 64
+    soutien_n = [0] * 64
+    for sq in range(64):
+        f = chess.square_file(sq)
+        r = chess.square_rank(sq)
+        fichiers_adj = 0
+        for af in (f - 1, f + 1):
+            if 0 <= af <= 7:
+                fichiers_adj |= chess.BB_FILES[af]
+        fichiers_passe = fichiers_adj | chess.BB_FILES[f]
+
+        rangs_au_dessus = 0
+        for rr in range(r + 1, 8):
+            rangs_au_dessus |= chess.BB_RANKS[rr]
+        rangs_en_dessous = 0
+        for rr in range(0, r):
+            rangs_en_dessous |= chess.BB_RANKS[rr]
+        rangs_jusqua = 0
+        for rr in range(0, r + 1):
+            rangs_jusqua |= chess.BB_RANKS[rr]
+        rangs_depuis = 0
+        for rr in range(r, 8):
+            rangs_depuis |= chess.BB_RANKS[rr]
+
+        passe_b[sq] = fichiers_passe & rangs_au_dessus
+        passe_n[sq] = fichiers_passe & rangs_en_dessous
+        soutien_b[sq] = fichiers_adj & rangs_jusqua
+        soutien_n[sq] = fichiers_adj & rangs_depuis
+    return passe_b, passe_n, soutien_b, soutien_n
+
+
+(
+    _MASQUE_PASSE_BLANC,
+    _MASQUE_PASSE_NOIR,
+    _MASQUE_SOUTIEN_BLANC,
+    _MASQUE_SOUTIEN_NOIR,
+) = _construire_masques_pions()
+
+
 def evaluer_structure_pions(board: chess.Board) -> int:
     score = 0
-    for couleur in chess.COLORS:
-        signe = 1 if couleur == chess.WHITE else -1
-        colonnes, cases_alliees = _pions_par_colonne_et_cases(board, couleur)
-        pions_ennemis = list(board.pieces(chess.PAWN, not couleur))
+    popcount = chess.popcount
+    scan = chess.scan_forward
+    pions_blancs = board.pawns & board.occupied_co[chess.WHITE]
+    pions_noirs = board.pawns & board.occupied_co[chess.BLACK]
 
+    for couleur in chess.COLORS:
+        blanc = couleur == chess.WHITE
+        signe = 1 if blanc else -1
+        propres = pions_blancs if blanc else pions_noirs
+        ennemis = pions_noirs if blanc else pions_blancs
+        masque_passe = _MASQUE_PASSE_BLANC if blanc else _MASQUE_PASSE_NOIR
+        masque_soutien = _MASQUE_SOUTIEN_BLANC if blanc else _MASQUE_SOUTIEN_NOIR
+
+        colonnes = [popcount(propres & chess.BB_FILES[f]) for f in range(8)]
         for fichier, nombre in enumerate(colonnes):
             if nombre > 1:
                 score -= signe * MALUS_PION_DOUBLE * (nombre - 1)
-            if nombre > 0 and _pion_isole(colonnes, fichier):
-                score -= signe * MALUS_PION_ISOLE
+            if nombre > 0:
+                gauche = colonnes[fichier - 1] if fichier > 0 else 0
+                droite = colonnes[fichier + 1] if fichier < 7 else 0
+                if gauche == 0 and droite == 0:
+                    score -= signe * MALUS_PION_ISOLE
 
-        for case in cases_alliees:
-            if _pion_arriere(case, couleur, colonnes, cases_alliees):
+        for case in scan(propres):
+            rang = chess.square_rank(case)
+            arriere = rang < 4 if blanc else rang > 3
+            if arriere and (propres & masque_soutien[case]) == 0:
                 score -= signe * MALUS_PION_ARRIERE
-            if _pion_passe(case, couleur, pions_ennemis):
-                bonus = BONUS_PION_PASSE + chess.square_rank(case) * 4
-                if couleur == chess.BLACK:
-                    bonus = BONUS_PION_PASSE + (7 - chess.square_rank(case)) * 4
-                score += signe * bonus
+            if (ennemis & masque_passe[case]) == 0:
+                avance = rang if blanc else 7 - rang
+                score += signe * (BONUS_PION_PASSE + avance * 4)
     return score
 
 
@@ -469,26 +542,21 @@ def _distance_chebyshev(case_a: chess.Square, case_b: chess.Square) -> int:
 
 
 def _sans_dames_ni_mineures(board: chess.Board) -> bool:
-    for piece_type in (chess.QUEEN, chess.KNIGHT, chess.BISHOP):
-        if board.pieces(piece_type, chess.WHITE) or board.pieces(piece_type, chess.BLACK):
-            return False
-    return True
+    return not (board.queens or board.knights or board.bishops)
 
 
 def est_finale_roi_pion(board: chess.Board) -> bool:
     """Vrai si la position est un roi + pion contre roi."""
-    if len(board.piece_map()) != 3:
+    if chess.popcount(board.occupied) != 3:
         return False
-    pions = len(board.pieces(chess.PAWN, chess.WHITE)) + len(board.pieces(chess.PAWN, chess.BLACK))
-    return pions == 1
+    return chess.popcount(board.pawns) == 1
 
 
 def est_finale_tours(board: chess.Board) -> bool:
     """Vrai si la position est une finale de tours (sans dames ni pièces mineures)."""
     if not _sans_dames_ni_mineures(board):
         return False
-    tours = len(board.pieces(chess.ROOK, chess.WHITE)) + len(board.pieces(chess.ROOK, chess.BLACK))
-    return tours >= 1
+    return board.rooks != 0
 
 
 def _opposition(board: chess.Board) -> int:
@@ -590,14 +658,15 @@ def _evaluer_tours_finale(board: chess.Board) -> int:
     return score
 
 
-def evaluer_finale(board: chess.Board) -> int:
+def evaluer_finale(board: chess.Board, facteur: int | None = None) -> int:
     if est_finale_roi_pion(board):
         return _evaluer_roi_pion_finale(board)
 
     if est_finale_tours(board):
         return _evaluer_tours_finale(board)
 
-    facteur = _facteur_finale(board)
+    if facteur is None:
+        facteur = _facteur_finale(board)
     if facteur < 128:
         return 0
 
@@ -617,14 +686,36 @@ def evaluer(board: chess.Board) -> int:
     Évalue la position en centipions du point de vue des Blancs.
     Positif = avantage Blanc, négatif = avantage Noir.
     """
+    facteur = _facteur_finale(board)
+    return evaluer_noyau(board, facteur) + evaluer_extras(board)
+
+
+def evaluer_noyau(board: chess.Board, facteur: int | None = None) -> int:
+    """
+    Termes d'évaluation « bon marché » et/ou de grande amplitude : matériel,
+    PST, centre, paire de fous, colonnes ouvertes, finales spécialisées.
+    Utilisé par l'évaluation paresseuse (lazy) en quiescence.
+    """
+    if facteur is None:
+        facteur = _facteur_finale(board)
     return (
         evaluer_materiel(board)
-        + evaluer_pst(board)
+        + evaluer_pst(board, facteur)
         + _evaluer_centre(board)
-        + evaluer_mobilite(board)
-        + evaluer_securite_roi(board)
-        + evaluer_structure_pions(board)
         + evaluer_paire_fous(board)
         + evaluer_colonnes_ouvertes(board)
-        + evaluer_finale(board)
+        + evaluer_finale(board, facteur)
+    )
+
+
+def evaluer_extras(board: chess.Board) -> int:
+    """
+    Termes positionnels plus coûteux et d'amplitude bornée : mobilité,
+    sécurité du roi, structure de pions. Séparés du noyau pour permettre
+    l'évaluation paresseuse.
+    """
+    return (
+        evaluer_mobilite(board)
+        + evaluer_securite_roi(board)
+        + evaluer_structure_pions(board)
     )

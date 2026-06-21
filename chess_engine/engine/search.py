@@ -7,7 +7,12 @@ import time
 
 import chess
 
-from chess_engine.engine.evaluation import VALEURS_PIECE, evaluer
+from chess_engine.engine.evaluation import (
+    VALEURS_PIECE,
+    evaluer,
+    evaluer_extras,
+    evaluer_noyau,
+)
 from chess_engine.engine.move_ordering import OrdonnancementCoups
 from chess_engine.engine.opening_book import livre_actif, livre_ouvertures
 from chess_engine.engine.time_manager import GestionnaireTemps
@@ -21,6 +26,13 @@ REDUCTION_NULL_MOVE = 3
 
 # Élagage SEE des captures perdantes en quiescence.
 see_actif = True
+# Delta pruning en quiescence : on saute les captures qui ne peuvent pas
+# remonter alpha même en gagnant la pièce visée plus une marge positionnelle.
+delta_pruning_actif = True
+DELTA_MARGE = 150
+# Évaluation paresseuse (lazy) du stand-pat en quiescence.
+lazy_eval_actif = True
+LAZY_MARGE = 300
 # Late Move Reductions (LMR) : on réduit la profondeur des coups tranquilles tardifs.
 lmr_actif = True
 LMR_PROFONDEUR_MIN = 3
@@ -28,6 +40,10 @@ LMR_INDICE_MIN = 3
 # Extensions d'échec : on prolonge la recherche quand le camp au trait est en échec.
 extensions_actives = True
 EXTENSION_MAX = 3
+# Reverse futility pruning (static null move) sur les nœuds non-PV peu profonds.
+rfp_actif = True
+RFP_PROFONDEUR_MAX = 6
+RFP_MARGE = 110
 
 
 def _valeur_piece(piece_type: chess.PieceType) -> int:
@@ -68,6 +84,18 @@ def _see_sur_case(board: chess.Board, case: chess.Square, valeur_sur_case: int) 
     board.pop()
     # Le camp au trait peut refuser l'échange s'il est défavorable.
     return max(0, gain)
+
+
+def _valeur_capturee(board: chess.Board, coup: chess.Move) -> int:
+    """Valeur (centipions) de la pièce capturée, promotion comprise."""
+    if board.is_en_passant(coup):
+        valeur = VALEURS_PIECE[chess.PAWN]
+    else:
+        victime = board.piece_at(coup.to_square)
+        valeur = _valeur_piece(victime.piece_type) if victime else 0
+    if coup.promotion is not None:
+        valeur += _valeur_piece(coup.promotion) - VALEURS_PIECE[chess.PAWN]
+    return valeur
 
 
 def see_capture(board: chess.Board, coup: chess.Move) -> int:
@@ -174,6 +202,32 @@ def _evaluer_position(board: chess.Board, cle: int | None = None) -> int:
     return score
 
 
+def _stand_pat(board: chess.Board, alpha: int, beta: int, cle: int | None = None) -> int:
+    """
+    Évaluation paresseuse pour le stand-pat de la quiescence : on calcule
+    d'abord le noyau (matériel + PST + termes bon marché). Si ce noyau est déjà
+    loin hors de la fenêtre [alpha, beta] d'au moins LAZY_MARGE, on retourne le
+    noyau sans calculer les termes coûteux (mobilité, sécurité roi, structure) —
+    leur amplitude est bornée par LAZY_MARGE, donc la coupure reste correcte.
+    """
+    if bruit_evaluation != 0 or not lazy_eval_actif:
+        return _evaluer_position(board, cle)
+
+    if cle is not None:
+        score_cache = _cache_eval_statique.get(cle)
+        if score_cache is not None:
+            return score_cache
+
+    noyau = evaluer_noyau(board)
+    if noyau - LAZY_MARGE >= beta or noyau + LAZY_MARGE <= alpha:
+        return noyau
+
+    total = noyau + evaluer_extras(board)
+    if cle is not None and len(_cache_eval_statique) < TAILLE_MAX_CACHE_EVAL:
+        _cache_eval_statique[cle] = total
+    return total
+
+
 def _evaluer_terminal(board: chess.Board, profondeur: int, cle: int | None = None) -> int:
     """Évalue une feuille ou une position terminale."""
     if board.is_checkmate():
@@ -231,14 +285,20 @@ def _coups_quiescence(
     niveau: int,
     coup_tt: chess.Move | None = None,
 ) -> list[chess.Move]:
+    """
+    Coups tactiques pour la quiescence : captures (via `generate_legal_captures`,
+    bien plus rapide que filtrer tous les coups légaux) + promotions de pion.
+
+    On n'explore volontairement **pas** les échecs tranquilles en quiescence :
+    en Python le test d'échec (push/pop par coup) coûtait ~30 % du temps total.
+    La recherche principale couvre déjà les échecs via les extensions.
+    """
     tactiques: list[chess.Move] = []
-    for coup in board.legal_moves:
-        if not _est_coup_tactique(board, coup):
-            continue
-        # On élague les captures clairement perdantes (SEE < 0). La SEE n'est
-        # calculée que lorsqu'on prend avec une pièce plus chère que la victime
-        # (seul cas potentiellement perdant), afin de rester rapide.
-        if see_actif and board.is_capture(coup) and coup.promotion is None:
+    for coup in board.generate_legal_captures():
+        # Élagage SEE des captures clairement perdantes (SEE < 0), uniquement
+        # quand on prend avec une pièce plus chère que la victime (seul cas
+        # potentiellement perdant) afin de rester rapide.
+        if see_actif and coup.promotion is None:
             attaquant = board.piece_at(coup.from_square)
             victime = board.piece_at(coup.to_square)
             val_attaquant = _valeur_piece(attaquant.piece_type) if attaquant else 0
@@ -250,6 +310,19 @@ def _coups_quiescence(
             if val_attaquant > val_victime and see_capture(board, coup) < 0:
                 continue
         tactiques.append(coup)
+
+    # Promotions sans capture (poussée du pion sur la dernière rangée) : c'est
+    # une ressource tactique majeure que la quiescence doit voir.
+    rang_promo = 6 if board.turn == chess.WHITE else 1
+    direction = 8 if board.turn == chess.WHITE else -8
+    for case in board.pieces(chess.PAWN, board.turn):
+        if chess.square_rank(case) != rang_promo:
+            continue
+        arrivee = case + direction
+        if board.piece_at(arrivee) is None:
+            coup = chess.Move(case, arrivee, promotion=chess.QUEEN)
+            if board.is_legal(coup):
+                tactiques.append(coup)
 
     if ordonnancement_actif:
         return ordonnancement.ordonner(board, tactiques, niveau, coup_tt)
@@ -282,7 +355,7 @@ def quiescence(
         return _evaluer_terminal(board, 0, cle)
 
     # Stand-pat : on peut s'arrêter sans capturer si l'éval est déjà suffisante.
-    stand_pat = _evaluer_position(board, cle)
+    stand_pat = _stand_pat(board, alpha, beta, cle)
 
     if board.turn == chess.WHITE:
         if stand_pat >= beta:
@@ -302,9 +375,16 @@ def quiescence(
     if not coups:
         return stand_pat
 
+    en_echec = board.is_check()
+
     if board.turn == chess.WHITE:
         valeur = alpha
         for coup in coups:
+            # Delta pruning : si même en gagnant la pièce capturée (plus une
+            # marge positionnelle) on ne peut pas atteindre alpha, on saute.
+            if delta_pruning_actif and not en_echec and coup.promotion is None:
+                if stand_pat + _valeur_capturee(board, coup) + DELTA_MARGE < alpha:
+                    continue
             cle_fils = zobrist.appliquer_coup(cle, board, coup)
             board.push(coup)
             score = quiescence(
@@ -320,6 +400,9 @@ def quiescence(
 
     valeur = beta
     for coup in coups:
+        if delta_pruning_actif and not en_echec and coup.promotion is None:
+            if stand_pat - _valeur_capturee(board, coup) - DELTA_MARGE > beta:
+                continue
         cle_fils = zobrist.appliquer_coup(cle, board, coup)
         board.push(coup)
         score = quiescence(
@@ -515,6 +598,32 @@ def alpha_beta(
             if coup_tt is not None:
                 pv.append(coup_tt)
         return score_tt
+
+    # Reverse futility pruning (static null move) : sur un nœud non-PV peu
+    # profond et hors échec, si l'évaluation statique dépasse beta d'une marge
+    # confortable, on suppose une coupure sans explorer (le camp au trait a
+    # tellement d'avance qu'un coup tranquille suffira). Symétrique côté Noirs.
+    en_pv = beta - alpha > 1
+    if (
+        rfp_actif
+        and not en_pv
+        and not en_echec
+        and profondeur <= RFP_PROFONDEUR_MAX
+        and abs(beta) < SCORE_MAT - 1000
+        and abs(alpha) < SCORE_MAT - 1000
+    ):
+        eval_statique = _evaluer_position(board, cle)
+        marge = RFP_MARGE * profondeur
+        if board.turn == chess.WHITE:
+            if eval_statique - marge >= beta:
+                if pv is not None:
+                    pv.clear()
+                return eval_statique
+        else:
+            if eval_statique + marge <= alpha:
+                if pv is not None:
+                    pv.clear()
+                return eval_statique
 
     if _peut_null_move(board, profondeur):
         board.push(chess.Move.null())
