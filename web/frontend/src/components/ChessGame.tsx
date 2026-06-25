@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
@@ -95,6 +95,9 @@ export function ChessGame() {
     depart: string;
     arrivee: string;
   } | null>(null);
+  // Drapeau de perte au temps : une fois posé, la partie est définitivement
+  // terminée (le backend ignore le temps, donc une synchro ne doit pas la rouvrir).
+  const finTempsRef = useRef<"white" | "black" | null>(null);
 
   const enRevue = plyVue !== null;
   const fenPlateau = enRevue
@@ -123,15 +126,19 @@ export function ChessGame() {
     setHistorique(etat.moves);
     setFen(etat.fen);
     setEvaluation(etat.evaluation);
-    setPartieTerminee(etat.is_game_over);
-    setResultat(etat.result_reason ?? etat.result);
+    // Ne jamais « dé-terminer » une partie perdue au temps.
+    setPartieTerminee(etat.is_game_over || finTempsRef.current !== null);
+    if (finTempsRef.current === null) {
+      setResultat(etat.result_reason ?? etat.result);
+    }
     return etat;
   }, []);
 
   useEffect(() => {
-    if (timeout === null) {
+    if (timeout === null || finTempsRef.current !== null) {
       return;
     }
+    finTempsRef.current = timeout;
     setPartieTerminee(true);
     setResultat(resultatTimeout(timeout, couleurHumain));
   }, [timeout, couleurHumain]);
@@ -244,6 +251,7 @@ export function ChessGame() {
       setEnConfiguration(false);
       setErreur(null);
       setPlyVue(null);
+      finTempsRef.current = null;
       reinitialiser();
     },
     [reinitialiser],
@@ -298,10 +306,11 @@ export function ChessGame() {
     setFenDepart(undefined);
     setVerrouille(false);
     setPromotionEnAttente(null);
+    finTempsRef.current = null;
   };
 
   const envoyerCoup = async (uci: string) => {
-    if (!gameId || partieTerminee || enRevue) {
+    if (!gameId || partieTerminee || enRevue || finTempsRef.current !== null) {
       return;
     }
     setPlyVue(null);
@@ -309,6 +318,9 @@ export function ChessGame() {
     setErreur(null);
     try {
       const donnees = await jouerCoup(gameId, uci);
+      if (finTempsRef.current !== null) {
+        return;
+      }
       await synchroniserEtat(gameId);
       setDernierCoupMoteur(donnees.engine_move);
     } catch (probleme) {

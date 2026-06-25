@@ -164,7 +164,12 @@ CASES_CENTRE = (
 )
 
 BONUS_PAIRE_FOUS = 35
-BONUS_PION_PASSE = 25
+# Bonus d'un pion passé selon son avancement (indexé par le rang relatif au camp,
+# 0 = rangée de départ … 6 = avant-dernière rangée). Interpolé selon la phase :
+# en finale (PASSE_EG) un pion passé avancé vaut presque une pièce — c'est ce qui
+# pousse le moteur à faire la « course à la dame » plutôt que de promener son roi.
+PASSE_BONUS_MG = (0, 0, 12, 22, 42, 72, 120, 0)
+PASSE_BONUS_EG = (0, 16, 32, 56, 92, 150, 240, 0)
 MALUS_PION_DOUBLE = 15
 MALUS_PION_ISOLE = 12
 MALUS_PION_ARRIERE = 8
@@ -510,9 +515,60 @@ def evaluer_structure_pions(board: chess.Board) -> int:
             arriere = rang < 4 if blanc else rang > 3
             if arriere and (propres & masque_soutien[case]) == 0:
                 score -= signe * MALUS_PION_ARRIERE
-            if (ennemis & masque_passe[case]) == 0:
-                avance = rang if blanc else 7 - rang
-                score += signe * (BONUS_PION_PASSE + avance * 4)
+    return score
+
+
+def evaluer_pions_passes(board: chess.Board, facteur: int | None = None) -> int:
+    """
+    Bonus des pions passés, interpolé selon la phase (fort en finale).
+
+    Un pion passé est d'autant plus précieux qu'il est avancé : en finale, un
+    passé en 6e/7e rangée vaut presque une pièce, ce qui incite le moteur à le
+    pousser (course à la promotion) au lieu de déplacer son roi sans but.
+    """
+    if facteur is None:
+        facteur = _facteur_finale(board)
+
+    score = 0
+    occupe = board.occupied
+    pions_blancs = board.pawns & board.occupied_co[chess.WHITE]
+    pions_noirs = board.pawns & board.occupied_co[chess.BLACK]
+    roi_blanc = board.king(chess.WHITE)
+    roi_noir = board.king(chess.BLACK)
+
+    for couleur in chess.COLORS:
+        blanc = couleur == chess.WHITE
+        signe = 1 if blanc else -1
+        propres = pions_blancs if blanc else pions_noirs
+        ennemis = pions_noirs if blanc else pions_blancs
+        masque_passe = _MASQUE_PASSE_BLANC if blanc else _MASQUE_PASSE_NOIR
+        roi_propre = roi_blanc if blanc else roi_noir
+        roi_ennemi = roi_noir if blanc else roi_blanc
+
+        for case in chess.scan_forward(propres):
+            if (ennemis & masque_passe[case]) != 0:
+                continue
+            rang = chess.square_rank(case)
+            idx = rang if blanc else 7 - rang
+            mg = PASSE_BONUS_MG[idx]
+            eg = PASSE_BONUS_EG[idx]
+            bonus = mg + (eg - mg) * facteur // 256
+
+            # Case d'avancement libre : le pion peut progresser tout de suite.
+            devant = case + 8 if blanc else case - 8
+            if 0 <= devant < 64 and not (occupe & chess.BB_SQUARES[devant]):
+                bonus += bonus // 4
+
+            # En finale, la proximité des rois compte (escorte / blocage).
+            if facteur >= 128:
+                case_promo = chess.square(chess.square_file(case), 7 if blanc else 0)
+                if roi_ennemi is not None:
+                    bonus += _distance_chebyshev(roi_ennemi, case_promo) * 5
+                if roi_propre is not None:
+                    bonus -= _distance_chebyshev(roi_propre, case_promo) * 2
+
+            score += signe * bonus
+
     return score
 
 
@@ -798,6 +854,7 @@ def evaluer_noyau(board: chess.Board, facteur: int | None = None) -> int:
         + _evaluer_centre(board)
         + evaluer_paire_fous(board)
         + evaluer_colonnes_ouvertes(board)
+        + evaluer_pions_passes(board, facteur)
         + evaluer_principes(board, facteur)
         + evaluer_finale(board, facteur)
     )
